@@ -18,6 +18,7 @@ import adminRoutes from './routes/admin';
 import stripeRoutes from './routes/stripe';
 import twitterAuthRoutes from './routes/twitterAuth';
 import analyticsRoutes from './routes/analytics';
+import socialRoutes from './routes/social';
 
 const app = express();
 const PORT = process.env.PORT || 5000;
@@ -61,6 +62,7 @@ app.use('/api/admin', adminRoutes);
 app.use('/api/stripe', stripeRoutes);
 app.use('/api/twitter-auth', twitterAuthRoutes); // For twitter auth
 app.use('/api/analytics', analyticsRoutes); // Analytics and AI content generation
+app.use('/api/social', socialRoutes); // Social data with platform credentials
 
 // Connect to MongoDB
 mongoose.connect(process.env.MONGODB_URI as string)

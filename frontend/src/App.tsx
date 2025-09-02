@@ -21,6 +21,8 @@ import Subscription from './pages/Subscription';
 import AuthCallback from './pages/AuthCallback';
 import Analytics from './pages/Analytics';
 import ContentGeneration from './pages/ContentGeneration';
+import TermsOfService from './pages/TermsOfService';
+import PrivacyPolicy from './pages/PrivacyPolicy';
 
 // Dark theme matching X/Twitter
 const darkTheme = createTheme({
@@ -54,8 +56,11 @@ const AppContent = () => {
   const location = useLocation();
   const { isAuthenticated } = useSelector((state: RootState) => state.auth);
   
-  // Don't show navigation on login page or auth callback
-  const hideNavigation = location.pathname === '/login' || location.pathname === '/auth/callback';
+  // Don't show navigation on login page, auth callback, terms, or privacy pages
+  const hideNavigation = location.pathname === '/login' || 
+                         location.pathname === '/auth/callback' ||
+                         location.pathname === '/terms' ||
+                         location.pathname === '/privacy';
 
   return (
     <div style={{ backgroundColor: '#000000', minHeight: '100vh' }}>
@@ -63,6 +68,8 @@ const AppContent = () => {
       <Routes>
         <Route path="/login" element={<Login />} />
         <Route path="/auth/callback" element={<AuthCallback />} />
+        <Route path="/terms" element={<TermsOfService />} />
+        <Route path="/privacy" element={<PrivacyPolicy />} />
         <Route path="/" element={
           <ProtectedRoute>
             <Dashboard />

@@ -21,6 +21,7 @@
     "node-cron": "^3.0.2",
     "stripe": "^18.5.0",
     "ts-node": "^10.9.1",
+    "twitter-api-sdk": "^1.2.1",
     "twitter-api-v2": "^1.15.0",
     "winston": "^3.10.0"
   },
