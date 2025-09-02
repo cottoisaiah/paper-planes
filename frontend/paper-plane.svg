@@ -1,0 +1,8 @@
+<svg width="32" height="32" viewBox="0 0 100 100" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <!-- Paper plane outline -->
+  <path d="M85 15L15 50L30 55L45 70L50 45L85 15Z" stroke="white" stroke-width="2" fill="none"/>
+  <!-- Paper plane body -->
+  <path d="M85 15L50 45L45 70L30 55L15 50L85 15Z" fill="white" fill-opacity="0.1"/>
+  <!-- Inner lines for detail -->
+  <path d="M85 15L45 70M50 45L30 55" stroke="white" stroke-width="1" opacity="0.7"/>
+</svg>
