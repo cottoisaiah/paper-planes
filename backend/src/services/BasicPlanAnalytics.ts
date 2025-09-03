@@ -50,14 +50,14 @@ class BasicPlanAnalytics {
       });
 
       // Calculate engagement insights from available data
-      const tweetData = tweets.data || [];
-      const totalEngagement = tweetData.reduce((sum, tweet) => {
+      const tweetData = tweets.data?.data || [];
+      const totalEngagement = tweetData.reduce((sum: number, tweet: any) => {
         const metrics = tweet.public_metrics;
         return sum + (metrics?.like_count || 0) + (metrics?.retweet_count || 0) + (metrics?.reply_count || 0);
       }, 0);
 
       // Find top performing tweet
-      const topTweet = tweetData.reduce((best, current) => {
+      const topTweet = tweetData.reduce((best: any, current: any) => {
         const currentScore = (current.public_metrics?.like_count || 0) + 
                            (current.public_metrics?.retweet_count || 0) * 2 +
                            (current.public_metrics?.reply_count || 0);
@@ -111,8 +111,8 @@ class BasicPlanAnalytics {
         'tweet.fields': ['created_at', 'public_metrics', 'author_id']
       });
 
-      const tweets = results.data || [];
-      const totalEngagement = tweets.reduce((sum, tweet) => {
+      const tweets = results.data?.data || [];
+      const totalEngagement = tweets.reduce((sum: number, tweet: any) => {
         const metrics = tweet.public_metrics;
         return sum + (metrics?.like_count || 0) + (metrics?.retweet_count || 0);
       }, 0);

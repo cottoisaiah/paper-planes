@@ -18,7 +18,12 @@ import {
   TextField,
   Box,
   Grid,
-  IconButton
+  IconButton,
+  FormControl,
+  InputLabel,
+  Select,
+  MenuItem,
+  SelectChangeEvent
 } from '@mui/material';
 import { Add, Edit, Delete, PlayArrow, Stop } from '@mui/icons-material';
 import axios from 'axios';
@@ -41,9 +46,70 @@ const Missions = () => {
   const [formData, setFormData] = useState({
     objective: '',
     intentDescription: '',
-    repeatSchedule: '0 * * * *', // Hourly
+    scheduleType: 'daily', // daily, weekly, hourly, custom
+    scheduleTime: '12:00', // HH:MM format
+    customCron: '',
     targetQueries: ''
   });
+
+  // Helper function to convert schedule to cron
+  const scheduleToCron = (type: string, time: string, customCron: string): string => {
+    if (type === 'custom') return customCron;
+    
+    const [hours, minutes] = time.split(':').map(Number);
+    
+    switch (type) {
+      case 'hourly':
+        return `${minutes} * * * *`; // Every hour at specified minute
+      case 'daily':
+        return `${minutes} ${hours} * * *`; // Daily at specified time
+      case 'weekly':
+        return `${minutes} ${hours} * * 0`; // Weekly on Sunday at specified time
+      case 'monthly':
+        return `${minutes} ${hours} 1 * *`; // Monthly on 1st at specified time
+      default:
+        return `${minutes} ${hours} * * *`; // Default to daily
+    }
+  };
+
+  // Helper function to convert cron to readable format
+  const cronToReadable = (cron: string): string => {
+    const scheduleMap: { [key: string]: string } = {
+      '0 * * * *': 'Every hour',
+      '0 0 * * *': 'Daily at midnight',
+      '0 0 * * 0': 'Weekly on Sunday',
+      '0 0 1 * *': 'Monthly on 1st',
+      '0 12 * * *': 'Daily at noon',
+      '30 9 * * *': 'Daily at 9:30 AM',
+      '0 18 * * *': 'Daily at 6:00 PM'
+    };
+    
+    // Try to match common patterns
+    if (scheduleMap[cron]) return scheduleMap[cron];
+    
+    // Parse cron to create readable format
+    const parts = cron.split(' ');
+    if (parts.length >= 5) {
+      const minute = parts[0];
+      const hour = parts[1];
+      const day = parts[2];
+      const dayOfWeek = parts[4];
+      
+      if (hour !== '*' && minute !== '*') {
+        const time = `${hour.padStart(2, '0')}:${minute.padStart(2, '0')}`;
+        if (dayOfWeek !== '*') {
+          const days = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
+          return `Weekly on ${days[parseInt(dayOfWeek)]} at ${time}`;
+        } else if (day === '1') {
+          return `Monthly on 1st at ${time}`;
+        } else {
+          return `Daily at ${time}`;
+        }
+      }
+    }
+    
+    return cron; // Fallback to showing cron syntax
+  };
 
   useEffect(() => {
     fetchMissions();
@@ -66,7 +132,9 @@ const Missions = () => {
     setFormData({
       objective: '',
       intentDescription: '',
-      repeatSchedule: '0 * * * *',
+      scheduleType: 'daily',
+      scheduleTime: '12:00',
+      customCron: '',
       targetQueries: ''
     });
     setDialogOpen(true);
@@ -74,10 +142,41 @@ const Missions = () => {
 
   const handleEditMission = (mission: Mission) => {
     setSelectedMission(mission);
+    
+    // Parse existing cron back to form data (best effort)
+    let scheduleType = 'daily';
+    let scheduleTime = '12:00';
+    let customCron = mission.repeatSchedule;
+    
+    const parts = mission.repeatSchedule.split(' ');
+    if (parts.length >= 5) {
+      const minute = parts[0];
+      const hour = parts[1];
+      const dayOfWeek = parts[4];
+      
+      if (hour !== '*' && minute !== '*') {
+        scheduleTime = `${hour.padStart(2, '0')}:${minute.padStart(2, '0')}`;
+        if (dayOfWeek === '0') {
+          scheduleType = 'weekly';
+        } else if (parts[2] === '1') {
+          scheduleType = 'monthly';
+        } else {
+          scheduleType = 'daily';
+        }
+      } else if (hour === '*') {
+        scheduleType = 'hourly';
+        scheduleTime = `00:${minute.padStart(2, '0')}`;
+      } else {
+        scheduleType = 'custom';
+      }
+    }
+    
     setFormData({
       objective: mission.objective,
       intentDescription: mission.intentDescription,
-      repeatSchedule: mission.repeatSchedule,
+      scheduleType,
+      scheduleTime,
+      customCron,
       targetQueries: mission.targetQueries.join(', ')
     });
     setDialogOpen(true);
@@ -88,6 +187,7 @@ const Missions = () => {
       const token = localStorage.getItem('token');
       const missionData = {
         ...formData,
+        repeatSchedule: scheduleToCron(formData.scheduleType, formData.scheduleTime, formData.customCron),
         targetQueries: formData.targetQueries.split(',').map(q => q.trim()).filter(q => q)
       };
 
@@ -140,13 +240,7 @@ const Missions = () => {
   };
 
   const formatSchedule = (cron: string) => {
-    const scheduleMap: { [key: string]: string } = {
-      '0 * * * *': 'Hourly',
-      '0 0 * * *': 'Daily',
-      '0 0 * * 0': 'Weekly',
-      '0 0 1 * *': 'Monthly'
-    };
-    return scheduleMap[cron] || cron;
+    return cronToReadable(cron);
   };
 
   return (
@@ -267,16 +361,52 @@ const Missions = () => {
               />
             </Grid>
             <Grid item xs={12} sm={6}>
-              <TextField
-                fullWidth
-                label="Schedule (Cron)"
-                value={formData.repeatSchedule}
-                onChange={(e) => setFormData({ ...formData, repeatSchedule: e.target.value })}
-                placeholder="0 * * * * (hourly)"
-                sx={{ mb: 2 }}
-              />
+              <FormControl fullWidth sx={{ mb: 2 }}>
+                <InputLabel>Schedule Type</InputLabel>
+                <Select
+                  value={formData.scheduleType}
+                  label="Schedule Type"
+                  onChange={(e: SelectChangeEvent) => setFormData({ ...formData, scheduleType: e.target.value })}
+                >
+                  <MenuItem value="hourly">Hourly</MenuItem>
+                  <MenuItem value="daily">Daily</MenuItem>
+                  <MenuItem value="weekly">Weekly (Sunday)</MenuItem>
+                  <MenuItem value="monthly">Monthly (1st)</MenuItem>
+                  <MenuItem value="custom">Custom Cron</MenuItem>
+                </Select>
+              </FormControl>
             </Grid>
             <Grid item xs={12} sm={6}>
+              {formData.scheduleType === 'custom' ? (
+                <TextField
+                  fullWidth
+                  label="Custom Cron Expression"
+                  value={formData.customCron}
+                  onChange={(e) => setFormData({ ...formData, customCron: e.target.value })}
+                  placeholder="0 12 * * *"
+                  sx={{ mb: 2 }}
+                  helperText="Use cron syntax (minute hour day month dayOfWeek)"
+                />
+              ) : (
+                <TextField
+                  fullWidth
+                  type="time"
+                  label="Time"
+                  value={formData.scheduleTime}
+                  onChange={(e) => setFormData({ ...formData, scheduleTime: e.target.value })}
+                  sx={{ mb: 2 }}
+                  helperText={
+                    formData.scheduleType === 'hourly' 
+                      ? "Minute of each hour (e.g., 12:30 = 30 minutes past each hour)"
+                      : `${formData.scheduleType === 'weekly' ? 'Sunday' : formData.scheduleType === 'monthly' ? '1st of month' : 'Every day'} at this time`
+                  }
+                  InputLabelProps={{
+                    shrink: true,
+                  }}
+                />
+              )}
+            </Grid>
+            <Grid item xs={12}>
               <TextField
                 fullWidth
                 label="Target Keywords"
@@ -284,7 +414,16 @@ const Missions = () => {
                 onChange={(e) => setFormData({ ...formData, targetQueries: e.target.value })}
                 placeholder="AI, machine learning, automation"
                 sx={{ mb: 2 }}
+                helperText="Comma-separated keywords to target"
               />
+            </Grid>
+            {/* Preview the generated cron */}
+            <Grid item xs={12}>
+              <Typography variant="caption" color="textSecondary">
+                <strong>Schedule Preview:</strong> {cronToReadable(scheduleToCron(formData.scheduleType, formData.scheduleTime, formData.customCron))}
+                <br />
+                <strong>Cron Expression:</strong> {scheduleToCron(formData.scheduleType, formData.scheduleTime, formData.customCron)}
+              </Typography>
             </Grid>
           </Grid>
         </DialogContent>

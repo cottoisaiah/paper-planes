@@ -11,7 +11,7 @@ import rateLimit from 'express-rate-limit';
 import winston from 'winston';
 import authRoutes from './routes/auth';
 import missionRoutes from './routes/missions';
-import botRoutes from './routes/bots';
+import botRoutes from './routes/enhanced-bots';
 import contextRoutes from './routes/context';
 import postRoutes from './routes/posts';
 import adminRoutes from './routes/admin';

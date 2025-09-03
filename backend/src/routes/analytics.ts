@@ -137,10 +137,10 @@ router.get('/followers', authenticate, async (req: any, res: any) => {
 
     // Get real-time follower metrics using Basic plan endpoints
     const twitterClient = new TwitterApi({
-      appKey: process.env.TWITTER_API_KEY,
-      appSecret: process.env.TWITTER_API_SECRET,
-      accessToken: process.env.TWITTER_ACCESS_TOKEN,
-      accessSecret: process.env.TWITTER_ACCESS_TOKEN_SECRET,
+      appKey: process.env.TWITTER_API_KEY!,
+      appSecret: process.env.TWITTER_API_SECRET!,
+      accessToken: process.env.TWITTER_ACCESS_TOKEN!,
+      accessSecret: process.env.TWITTER_ACCESS_TOKEN_SECRET!,
     });
 
     try {
@@ -155,8 +155,8 @@ router.get('/followers', authenticate, async (req: any, res: any) => {
         'tweet.fields': ['public_metrics', 'created_at']
       });
 
-      // Calculate engagement metrics from available data
-      const tweets = recentTweets.data || [];
+      // Calculate engagement metrics from available data  
+      const tweets = recentTweets.data?.data || [];
       const totalEngagement = tweets.reduce((sum: number, tweet: any) => {
         const metrics = tweet.public_metrics;
         return sum + (metrics?.like_count || 0) + (metrics?.retweet_count || 0) + (metrics?.reply_count || 0);
