@@ -80,6 +80,24 @@ export class AnalyticsService {
         return null;
       }
 
+      // Validate required Twitter API data
+      if (!user.xApiKeys || !user.xApiKeys.apiKey || !user.xApiKeys.apiKeySecret || 
+          !user.xApiKeys.accessToken || !user.xApiKeys.accessTokenSecret) {
+        logger.error('User missing required Twitter API keys', { userId, username: user.xUsername });
+        return null;
+      }
+
+      if (!user.xAccountId) {
+        logger.error('User missing xAccountId', { userId, username: user.xUsername });
+        return null;
+      }
+
+      logger.info('Initializing Twitter client for analytics collection', { 
+        userId, 
+        username: user.xUsername,
+        accountId: user.xAccountId 
+      });
+
       const twitterClient = new TwitterApi({
         appKey: user.xApiKeys.apiKey,
         appSecret: user.xApiKeys.apiKeySecret,
@@ -88,11 +106,13 @@ export class AnalyticsService {
       });
 
       // Get user's Twitter profile data
+      logger.info('Fetching user profile data from Twitter API', { userId });
       const userProfile = await twitterClient.v2.me({
         'user.fields': ['public_metrics', 'created_at']
       });
 
       // Get recent tweets for engagement calculation
+      logger.info('Fetching user timeline for engagement calculation', { userId });
       const tweets = await twitterClient.v2.userTimeline(user.xAccountId, {
         max_results: 100,
         'tweet.fields': ['public_metrics', 'created_at', 'author_id'],
@@ -138,6 +158,15 @@ export class AnalyticsService {
 
       const engagementRate = totalImpressions > 0 ? (totalEngagement / totalImpressions) * 100 : 0;
 
+      logger.info('Calculated engagement metrics', { 
+        userId, 
+        currentFollowers,
+        followerGrowth,
+        totalEngagement,
+        engagementRate,
+        todayPosts 
+      });
+
       // Create or update today's engagement data
       const engagementData = await EngagementData.findOneAndUpdate(
         { userId, date: today },
@@ -165,11 +194,29 @@ export class AnalyticsService {
         { upsert: true, new: true }
       );
 
-      logger.info('Analytics data collected successfully', { userId, date: today });
+      logger.info('Analytics data collected successfully', { userId, date: today, dataId: engagementData._id });
       return engagementData;
 
     } catch (error: any) {
-      logger.error('Error collecting engagement data', { userId, error: error.message });
+      logger.error('Error collecting engagement data', { 
+        userId, 
+        error: error.message,
+        code: error.code,
+        data: error.data,
+        stack: error.stack 
+      });
+      
+      // Provide more specific error information
+      if (error.code === 401) {
+        logger.error('Twitter API authentication failed - invalid credentials', { userId });
+      } else if (error.code === 403) {
+        logger.error('Twitter API access forbidden - check permissions or suspended account', { userId });
+      } else if (error.code === 429) {
+        logger.error('Twitter API rate limit exceeded', { userId });
+      } else if (error.code === 'ENOTFOUND') {
+        logger.error('Network error - unable to reach Twitter API', { userId });
+      }
+      
       return null;
     }
   }

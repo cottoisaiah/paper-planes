@@ -4,6 +4,7 @@ import AnalyticsService from '../services/AnalyticsService';
 import XAIService from '../services/XAIService';
 import ContextFunnel from '../models/ContextFunnel';
 import GeneratedPost from '../models/GeneratedPost';
+import Mission from '../models/Mission';
 import SocialMetricsService from '../services/SocialMetricsService';
 import User from '../models/User';
 import logger from '../utils/logger';
@@ -30,7 +31,28 @@ router.get('/summary', authenticate, async (req: any, res: any) => {
   try {
     const userId = req.user.id;
     const summary = await AnalyticsService.getEngagementSummary(userId);
-    res.json({ success: true, data: summary });
+    
+    // Get mission counts for dashboard
+    const [activeMissions, totalMissions, todayPosts] = await Promise.all([
+      Mission.countDocuments({ userId, active: true }),
+      Mission.countDocuments({ userId }),
+      GeneratedPost.countDocuments({ 
+        userId, 
+        createdAt: { 
+          $gte: new Date(new Date().setHours(0, 0, 0, 0)) 
+        } 
+      })
+    ]);
+    
+    const dashboardSummary = {
+      ...summary,
+      activeMissions,
+      totalMissions,
+      postsGeneratedToday: todayPosts,
+      aiGenerations: 0 // This would need to be tracked separately
+    };
+    
+    res.json({ success: true, data: dashboardSummary });
   } catch (error: any) {
     logger.error('Error fetching engagement summary', { error: error.message, userId: req.user.id });
     res.status(500).json({ success: false, message: 'Failed to fetch engagement summary' });
@@ -111,18 +133,6 @@ router.post('/generate-content', authenticate, requireActiveSubscription, async 
   } catch (error: any) {
     logger.error('Error generating content', { error: error.message, userId: req.user.id });
     res.status(500).json({ success: false, message: 'Failed to generate content' });
-  }
-});
-
-// Get engagement summary for dashboard
-router.get('/summary', authenticate, async (req: any, res: any) => {
-  try {
-    const userId = req.user.id;
-    const summary = await AnalyticsService.getEngagementSummary(userId);
-    res.json({ success: true, data: summary });
-  } catch (error: any) {
-    logger.error('Error fetching analytics summary', { error: error.message, userId: req.user.id });
-    res.status(500).json({ success: false, message: 'Failed to fetch analytics summary' });
   }
 });
 
@@ -225,16 +235,46 @@ router.get('/followers', authenticate, async (req: any, res: any) => {
 router.post('/collect', authenticate, async (req: any, res: any) => {
   try {
     const userId = req.user.id;
+    
+    // Check if user exists and has required data
+    const user = await User.findById(userId);
+    if (!user) {
+      return res.status(404).json({ success: false, message: 'User not found' });
+    }
+    
+    // Check if user has Twitter API keys configured
+    if (!user.xApiKeys || !user.xApiKeys.apiKey || !user.xAccountId) {
+      return res.status(400).json({ 
+        success: false, 
+        message: 'Twitter API keys not configured. Please complete Twitter authentication first.' 
+      });
+    }
+    
+    logger.info('Starting analytics collection for user', { userId, username: user.xUsername });
+    
     const data = await AnalyticsService.collectEngagementData(userId);
     
     if (data) {
+      logger.info('Analytics collection successful', { userId, dataId: data._id });
       res.json({ success: true, message: 'Analytics data collected successfully', data });
     } else {
-      res.status(400).json({ success: false, message: 'Failed to collect analytics data' });
+      logger.warn('Analytics collection returned null', { userId });
+      res.status(400).json({ 
+        success: false, 
+        message: 'Failed to collect analytics data. This may be due to Twitter API limits or authentication issues.' 
+      });
     }
   } catch (error: any) {
-    logger.error('Error collecting analytics data', { error: error.message, userId: req.user.id });
-    res.status(500).json({ success: false, message: 'Failed to collect analytics data' });
+    logger.error('Error collecting analytics data', { 
+      error: error.message, 
+      userId: req.user?.id,
+      stack: error.stack 
+    });
+    res.status(500).json({ 
+      success: false, 
+      message: 'Failed to collect analytics data',
+      error: process.env.NODE_ENV === 'development' ? error.message : undefined
+    });
   }
 });
 

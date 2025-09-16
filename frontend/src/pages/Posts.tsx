@@ -52,7 +52,12 @@ const Posts = () => {
       const response = await axios.get('/api/posts', {
         headers: { Authorization: `Bearer ${token}` }
       });
-      setPosts(response.data);
+      // Handle new API response format
+      if (response.data.posts) {
+        setPosts(response.data.posts);
+      } else {
+        setPosts(response.data); // Fallback for old format
+      }
     } catch (error) {
       toast.error('Failed to fetch posts');
     }

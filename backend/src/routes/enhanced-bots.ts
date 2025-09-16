@@ -1,6 +1,7 @@
 import express from 'express';
 import cron from 'node-cron';
 import Mission from '../models/Mission';
+import GeneratedPost from '../models/GeneratedPost';
 import { TwitterApi } from 'twitter-api-v2';
 import { authenticate, requireActiveSubscription } from '../middleware/auth';
 import AIReplyService, { Tweet, ReplyContext } from '../services/AIReplyService';
@@ -9,6 +10,43 @@ const router = express.Router();
 
 // Store active cron jobs
 const activeCronJobs = new Map();
+
+// Initialize and restore active missions on startup
+const initializeActiveMissions = async () => {
+  try {
+    console.log('🔄 Initializing active missions...');
+    const activeMissions = await Mission.find({ active: true });
+    
+    for (const mission of activeMissions) {
+      const twitterClient = new TwitterApi({
+        appKey: process.env.TWITTER_API_KEY!,
+        appSecret: process.env.TWITTER_API_SECRET!,
+        accessToken: process.env.TWITTER_ACCESS_TOKEN!,
+        accessSecret: process.env.TWITTER_ACCESS_TOKEN_SECRET!,
+      });
+
+      const executeMission = async () => {
+        const pilot = new PaperPlanePilot(twitterClient, mission);
+        await pilot.executeMission();
+      };
+      
+      const cronJob = cron.schedule(mission.repeatSchedule, executeMission, {
+        scheduled: true,
+        timezone: "America/New_York"
+      });
+      
+      activeCronJobs.set(mission._id.toString(), cronJob);
+      console.log(`✅ Restored mission: ${mission.objective} (${mission.repeatSchedule})`);
+    }
+    
+    console.log(`🚀 Restored ${activeMissions.length} active missions`);
+  } catch (error: any) {
+    console.error('❌ Failed to initialize active missions:', error.message);
+  }
+};
+
+// Initialize on module load
+initializeActiveMissions();
 
 // Rate limit tracking for Twitter API
 interface RateLimitWindow {
@@ -314,9 +352,49 @@ class PaperPlanePilot {
       return false;
     }
     
-    await this.twitterClient.v2.reply(replyText, tweet.id);
-    this.recordRequest('reply');
-    return true;
+    try {
+      const replyResponse = await this.twitterClient.v2.reply(replyText, tweet.id);
+      this.recordRequest('reply');
+      
+      // Save the reply to the database
+      try {
+        const generatedPost = new GeneratedPost({
+          userId: this.mission.userId,
+          missionId: this.mission._id,
+          content: `@${tweet.author_id} ${replyText}`, // Include the @ mention for context
+          status: 'sent',
+          xPostId: replyResponse.data?.id,
+          timestamp: new Date()
+        });
+        
+        await generatedPost.save();
+        console.log(`💾 Reply saved to database: ${generatedPost._id}`);
+      } catch (saveError: any) {
+        console.error(`❌ Failed to save reply to database: ${saveError.message}`);
+      }
+      
+      return true;
+    } catch (error: any) {
+      console.error(`❌ Failed to post reply: ${error.message}`);
+      
+      // Save failed reply to database for tracking
+      try {
+        const generatedPost = new GeneratedPost({
+          userId: this.mission.userId,
+          missionId: this.mission._id,
+          content: `@${tweet.author_id} ${replyText}`,
+          status: 'failed',
+          timestamp: new Date()
+        });
+        
+        await generatedPost.save();
+        console.log(`💾 Failed reply saved to database: ${generatedPost._id}`);
+      } catch (saveError: any) {
+        console.error(`❌ Failed to save failed reply to database: ${saveError.message}`);
+      }
+      
+      return false;
+    }
   }
 
   private async quoteTweet(tweet: Tweet, customContent?: string): Promise<boolean> {
@@ -337,9 +415,49 @@ class PaperPlanePilot {
     
     if (!quoteText) return false;
     
-    await this.twitterClient.v2.quote(quoteText, tweet.id);
-    this.recordRequest('post');
-    return true;
+    try {
+      const quoteResponse = await this.twitterClient.v2.quote(quoteText, tweet.id);
+      this.recordRequest('post');
+      
+      // Save the quote tweet to the database
+      try {
+        const generatedPost = new GeneratedPost({
+          userId: this.mission.userId,
+          missionId: this.mission._id,
+          content: quoteText,
+          status: 'sent',
+          xPostId: quoteResponse.data?.id,
+          timestamp: new Date()
+        });
+        
+        await generatedPost.save();
+        console.log(`💾 Quote tweet saved to database: ${generatedPost._id}`);
+      } catch (saveError: any) {
+        console.error(`❌ Failed to save quote tweet to database: ${saveError.message}`);
+      }
+      
+      return true;
+    } catch (error: any) {
+      console.error(`❌ Failed to post quote tweet: ${error.message}`);
+      
+      // Save failed quote tweet to database for tracking
+      try {
+        const generatedPost = new GeneratedPost({
+          userId: this.mission.userId,
+          missionId: this.mission._id,
+          content: quoteText,
+          status: 'failed',
+          timestamp: new Date()
+        });
+        
+        await generatedPost.save();
+        console.log(`💾 Failed quote tweet saved to database: ${generatedPost._id}`);
+      } catch (saveError: any) {
+        console.error(`❌ Failed to save failed quote tweet to database: ${saveError.message}`);
+      }
+      
+      return false;
+    }
   }
 
   private async followUser(userId: string): Promise<boolean> {
@@ -361,8 +479,26 @@ class PaperPlanePilot {
     try {
       console.log(`📤 Publishing post: "${post.content.substring(0, 50)}..."`);
       
-      await this.twitterClient.v2.tweet(post.content);
+      const tweetResponse = await this.twitterClient.v2.tweet(post.content);
       this.recordRequest('post');
+      
+      // Save the published post to the database
+      try {
+        const generatedPost = new GeneratedPost({
+          userId: this.mission.userId,
+          missionId: this.mission._id,
+          content: post.content,
+          status: 'sent',
+          xPostId: tweetResponse.data?.id,
+          timestamp: new Date()
+        });
+        
+        await generatedPost.save();
+        console.log(`💾 Post saved to database: ${generatedPost._id}`);
+      } catch (saveError: any) {
+        console.error(`❌ Failed to save post to database: ${saveError.message}`);
+        // Don't fail the whole operation if database save fails
+      }
       
       // Remove posted content from queue if it's a one-time post
       if (this.mission.postFrequency === 'once') {
@@ -373,6 +509,23 @@ class PaperPlanePilot {
       return true;
     } catch (error: any) {
       console.error(`❌ Failed to publish post: ${error.message}`);
+      
+      // Save failed post to database for tracking
+      try {
+        const generatedPost = new GeneratedPost({
+          userId: this.mission.userId,
+          missionId: this.mission._id,
+          content: post.content,
+          status: 'failed',
+          timestamp: new Date()
+        });
+        
+        await generatedPost.save();
+        console.log(`💾 Failed post saved to database: ${generatedPost._id}`);
+      } catch (saveError: any) {
+        console.error(`❌ Failed to save failed post to database: ${saveError.message}`);
+      }
+      
       return false;
     }
   }
@@ -511,22 +664,31 @@ router.post('/stop/:missionId', authenticate, async (req: any, res) => {
 
     const missionId = mission._id.toString();
     
+    // Check if we have an active cron job for this mission
     if (activeCronJobs.has(missionId)) {
       const cronJob = activeCronJobs.get(missionId);
       cronJob.stop();
-      cronJob.destroy();
+      // Note: node-cron doesn't have destroy method, just stop is sufficient
       activeCronJobs.delete(missionId);
       
-      // Update mission status
-      mission.active = false;
-      await mission.save();
-      
-      console.log(`🛑 Mission stopped: ${mission.objective}`);
-      
-      res.json({ message: 'Mission stopped successfully', mission });
+      console.log(`🛑 Mission stopped from active cron job: ${mission.objective}`);
     } else {
-      res.status(400).json({ message: 'Mission is not currently running' });
+      // Mission might be active in database but not in memory (e.g., after service restart)
+      // Just update the database status regardless
+      console.log(`🛑 Mission stop requested (not in active jobs): ${mission.objective}`);
     }
+    
+    // Always update mission status to inactive
+    mission.active = false;
+    await mission.save();
+    
+    console.log(`� Mission status updated to inactive: ${mission.objective}`);
+    
+    res.json({ 
+      message: 'Mission stopped successfully', 
+      mission,
+      note: activeCronJobs.has(missionId) ? 'Stopped active cron job' : 'Updated mission status (was not actively running)'
+    });
     
   } catch (error: any) {
     console.error('Failed to stop mission:', error.message);

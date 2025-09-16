@@ -14,6 +14,10 @@ interface EngagementSummary {
   avgEngagementRate: number;
   totalPosts30d: number;
   avgPostsPerDay: number;
+  activeMissions: number;
+  totalMissions: number;
+  postsGeneratedToday: number;
+  aiGenerations: number;
 }
 
 interface SocialMetrics {
@@ -287,7 +291,7 @@ const Dashboard = () => {
                 fontSize: { xs: '2rem', md: '3rem' }
               }}
             >
-              0
+              {summary?.activeMissions || 0}
             </Typography>
           </Paper>
         </Grid>
@@ -342,7 +346,7 @@ const Dashboard = () => {
               }}
             >
               <AutoAwesome sx={{ fontSize: 'inherit', mr: 1 }} />
-              {summary ? Math.ceil(summary.totalPosts30d * 0.8) : 0}
+              {summary?.aiGenerations || 0}
             </Typography>
           </Paper>
         </Grid>
