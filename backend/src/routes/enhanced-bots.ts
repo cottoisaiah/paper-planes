@@ -450,6 +450,90 @@ class PaperPlanePilot {
   }
 }
 
+// Start mission endpoint  
+router.post('/start/:missionId', authenticate, async (req: any, res) => {
+  try {
+    const mission: any = await Mission.findById(req.params.missionId);
+    if (!mission) return res.status(404).json({ message: 'Mission not found' });
+
+    // Check if mission already running
+    if (activeCronJobs.has(mission._id.toString())) {
+      return res.status(400).json({ message: 'Mission is already running' });
+    }
+
+    const twitterClient = new TwitterApi({
+      appKey: process.env.TWITTER_API_KEY!,
+      appSecret: process.env.TWITTER_API_SECRET!,
+      accessToken: process.env.TWITTER_ACCESS_TOKEN!,
+      accessSecret: process.env.TWITTER_ACCESS_TOKEN_SECRET!,
+    });
+
+    console.log(`🛩️  Starting mission: ${mission.objective}`);
+
+    const executeMission = async () => {
+      const pilot = new PaperPlanePilot(twitterClient, mission);
+      await pilot.executeMission();
+    };
+    
+    const cronJob = cron.schedule(mission.repeatSchedule, executeMission, {
+      scheduled: true,
+      timezone: "America/New_York"
+    });
+    
+    activeCronJobs.set(mission._id.toString(), cronJob);
+    
+    // Update mission status
+    mission.active = true;
+    await mission.save();
+    
+    console.log(`📅 Paper Plane scheduled: ${mission.repeatSchedule} (EDT)`);
+    
+    res.json({ 
+      message: 'Mission started successfully', 
+      mission,
+      missionType: mission.missionType,
+      actionsEnabled: mission.actions?.filter((a: any) => a.enabled).map((a: any) => a.type) || [],
+      nextExecution: 'As per schedule',
+      timezone: 'America/New_York'
+    });
+    
+  } catch (error: any) {
+    console.error('Failed to start mission:', error.message);
+    res.status(500).json({ message: 'Failed to start mission' });
+  }
+});
+
+// Stop mission endpoint
+router.post('/stop/:missionId', authenticate, async (req: any, res) => {
+  try {
+    const mission: any = await Mission.findById(req.params.missionId);
+    if (!mission) return res.status(404).json({ message: 'Mission not found' });
+
+    const missionId = mission._id.toString();
+    
+    if (activeCronJobs.has(missionId)) {
+      const cronJob = activeCronJobs.get(missionId);
+      cronJob.stop();
+      cronJob.destroy();
+      activeCronJobs.delete(missionId);
+      
+      // Update mission status
+      mission.active = false;
+      await mission.save();
+      
+      console.log(`🛑 Mission stopped: ${mission.objective}`);
+      
+      res.json({ message: 'Mission stopped successfully', mission });
+    } else {
+      res.status(400).json({ message: 'Mission is not currently running' });
+    }
+    
+  } catch (error: any) {
+    console.error('Failed to stop mission:', error.message);
+    res.status(500).json({ message: 'Failed to stop mission' });
+  }
+});
+
 // Enhanced emergency start endpoint
 router.post('/emergency-start/:missionId', async (req: any, res) => {
   try {
