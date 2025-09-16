@@ -19,7 +19,6 @@ import Context from './pages/Context';
 import Profile from './pages/Profile';
 import Subscription from './pages/Subscription';
 import AuthCallback from './pages/AuthCallback';
-import Analytics from './pages/Analytics';
 import ContentGeneration from './pages/ContentGeneration';
 import TermsOfService from './pages/TermsOfService';
 import PrivacyPolicy from './pages/PrivacyPolicy';
@@ -103,11 +102,6 @@ const AppContent = () => {
         <Route path="/subscription" element={
           <ProtectedRoute>
             <Subscription />
-          </ProtectedRoute>
-        } />
-        <Route path="/analytics" element={
-          <ProtectedRoute>
-            <Analytics />
           </ProtectedRoute>
         } />
         <Route path="/content-generation" element={

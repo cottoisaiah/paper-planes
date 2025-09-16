@@ -1,7 +1,7 @@
 import { Container, Typography, Grid, Paper, Box, useTheme, useMediaQuery, Button } from '@mui/material';
 import { useSelector } from 'react-redux';
 import { RootState } from '../store/store';
-import { Analytics, Psychology, TrendingUp, AutoAwesome, PostAdd, People } from '@mui/icons-material';
+import { Psychology, TrendingUp, AutoAwesome, PostAdd, People } from '@mui/icons-material';
 import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import axios from 'axios';
@@ -202,7 +202,7 @@ const Dashboard = () => {
       
       {/* Quick Actions */}
       <Grid container spacing={{ xs: 2, md: 3 }} sx={{ mb: 4 }}>
-        <Grid item xs={12} sm={6}>
+                <Grid item xs={12} sm={6}>
           <Paper sx={{ 
             p: { xs: 2, md: 3 }, 
             backgroundColor: '#111111', 
@@ -210,26 +210,26 @@ const Dashboard = () => {
             borderRadius: { xs: 2, md: 1 }
           }}>
             <Box sx={{ display: 'flex', alignItems: 'center', mb: 2 }}>
-              <Analytics sx={{ color: '#1DA1F2', fontSize: 32, mr: 2 }} />
+              <Psychology sx={{ color: '#9C27B0', fontSize: 32, mr: 2 }} />
               <Box>
                 <Typography variant="h6" sx={{ color: '#ffffff' }}>
-                  Analytics Dashboard
+                  AI Content Generation
                 </Typography>
                 <Typography variant="body2" sx={{ color: '#8899a6' }}>
-                  View detailed engagement metrics and trends
+                  Generate engaging tweets with AI
                 </Typography>
               </Box>
             </Box>
             <Button
               fullWidth
               variant="contained"
-              onClick={() => navigate('/analytics')}
+              onClick={() => navigate('/content-generation')}
               sx={{ 
-                backgroundColor: '#1DA1F2',
-                '&:hover': { backgroundColor: '#1991DB' }
+                backgroundColor: '#9C27B0',
+                '&:hover': { backgroundColor: '#7B1FA2' }
               }}
             >
-              View Analytics
+              Generate Content
             </Button>
           </Paper>
         </Grid>
@@ -373,26 +373,11 @@ const Dashboard = () => {
               mb: 2
             }}
           >
-            Start leveraging AI-powered analytics and content generation for your Twitter automation.
+            Start leveraging AI-powered content generation for your Twitter automation.
           </Typography>
           
           <Grid container spacing={2}>
-            <Grid item xs={12} sm={6}>
-              <Button
-                fullWidth
-                variant="outlined"
-                startIcon={<Analytics />}
-                onClick={() => navigate('/analytics')}
-                sx={{
-                  borderColor: '#1DA1F2',
-                  color: '#1DA1F2',
-                  '&:hover': { backgroundColor: '#1DA1F210' }
-                }}
-              >
-                View Analytics
-              </Button>
-            </Grid>
-            <Grid item xs={12} sm={6}>
+            <Grid item xs={12}>
               <Button
                 fullWidth
                 variant="outlined"
@@ -404,7 +389,7 @@ const Dashboard = () => {
                   '&:hover': { backgroundColor: '#9C27B010' }
                 }}
               >
-                Generate Content
+                AI Content Generation
               </Button>
             </Grid>
           </Grid>

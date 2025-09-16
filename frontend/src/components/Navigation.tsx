@@ -24,7 +24,6 @@ const Navigation = () => {
 
   const menuItems = [
     { label: 'Dashboard', path: '/' },
-    { label: 'Analytics', path: '/analytics' },
     { label: 'AI Content', path: '/content-generation' },
     { label: 'Missions', path: '/missions' },
     { label: 'Posts', path: '/posts' },
