@@ -23,7 +23,10 @@ import {
   InputLabel,
   Select,
   MenuItem,
-  SelectChangeEvent
+  SelectChangeEvent,
+  FormControlLabel,
+  Checkbox,
+  FormGroup
 } from '@mui/material';
 import { Add, Edit, Delete, PlayArrow, Stop } from '@mui/icons-material';
 import axios from 'axios';
@@ -37,6 +40,11 @@ interface Mission {
   targetQueries: string[];
   active: boolean;
   createdAt: string;
+  contentTypes?: {
+    posts: boolean;
+    replies: boolean;
+    quoteTweets: boolean;
+  };
 }
 
 const Missions = () => {
@@ -49,7 +57,12 @@ const Missions = () => {
     scheduleType: 'daily', // daily, weekly, hourly, custom
     scheduleTime: '12:00', // HH:MM format
     customCron: '',
-    targetQueries: ''
+    targetQueries: '',
+    contentTypes: {
+      posts: true,
+      replies: true,
+      quoteTweets: true
+    }
   });
 
   // Helper function to convert schedule to cron
@@ -135,7 +148,12 @@ const Missions = () => {
       scheduleType: 'daily',
       scheduleTime: '12:00',
       customCron: '',
-      targetQueries: ''
+      targetQueries: '',
+      contentTypes: {
+        posts: true,
+        replies: true,
+        quoteTweets: true
+      }
     });
     setDialogOpen(true);
   };
@@ -177,7 +195,12 @@ const Missions = () => {
       scheduleType,
       scheduleTime,
       customCron,
-      targetQueries: mission.targetQueries.join(', ')
+      targetQueries: mission.targetQueries.join(', '),
+      contentTypes: mission.contentTypes || {
+        posts: true,
+        replies: true,
+        quoteTweets: true
+      }
     });
     setDialogOpen(true);
   };
@@ -416,6 +439,64 @@ const Missions = () => {
                 sx={{ mb: 2 }}
                 helperText="Comma-separated keywords to target"
               />
+            </Grid>
+            <Grid item xs={12}>
+              <Typography variant="subtitle1" sx={{ color: '#ffffff', mb: 1 }}>
+                Content Types
+              </Typography>
+              <FormGroup row>
+                <FormControlLabel
+                  control={
+                    <Checkbox
+                      checked={formData.contentTypes.posts}
+                      onChange={(e) => setFormData({ 
+                        ...formData, 
+                        contentTypes: { 
+                          ...formData.contentTypes, 
+                          posts: e.target.checked 
+                        }
+                      })}
+                      sx={{ color: '#1DA1F2' }}
+                    />
+                  }
+                  label="Original Posts"
+                  sx={{ color: '#ffffff' }}
+                />
+                <FormControlLabel
+                  control={
+                    <Checkbox
+                      checked={formData.contentTypes.replies}
+                      onChange={(e) => setFormData({ 
+                        ...formData, 
+                        contentTypes: { 
+                          ...formData.contentTypes, 
+                          replies: e.target.checked 
+                        }
+                      })}
+                      sx={{ color: '#1DA1F2' }}
+                    />
+                  }
+                  label="Replies"
+                  sx={{ color: '#ffffff' }}
+                />
+                <FormControlLabel
+                  control={
+                    <Checkbox
+                      checked={formData.contentTypes.quoteTweets}
+                      onChange={(e) => setFormData({ 
+                        ...formData, 
+                        contentTypes: { 
+                          ...formData.contentTypes, 
+                          quoteTweets: e.target.checked 
+                        }
+                      })}
+                      sx={{ color: '#1DA1F2' }}
+                    />
+                  }
+                  label="Quote Tweets"
+                  sx={{ color: '#ffffff' }}
+                />
+              </FormGroup>
             </Grid>
             {/* Preview the generated cron */}
             <Grid item xs={12}>

@@ -43,7 +43,7 @@ export class AIReplyService {
         messages: [
           {
             role: 'system',
-            content: 'You are an intelligent social media bot that generates thoughtful, engaging replies to tweets. Keep responses under 280 characters, be authentic, and add value to the conversation.'
+            content: 'You are an intelligent social media bot that generates thoughtful, engaging replies to tweets. Keep responses under 250 characters, use 2-4 sentences maximum, never use emojis, be authentic and professional, and add value to the conversation.'
           },
           {
             role: 'user',
@@ -89,8 +89,10 @@ export class AIReplyService {
     prompt += `Generate a thoughtful reply that:\n`;
     prompt += `- Aligns with the mission objective\n`;
     prompt += `- Adds value to the conversation\n`;
-    prompt += `- Is authentic and engaging\n`;
-    prompt += `- Stays under 280 characters\n`;
+    prompt += `- Is authentic and professional\n`;
+    prompt += `- Uses exactly 2-4 sentences\n`;
+    prompt += `- Stays under 250 characters\n`;
+    prompt += `- Never includes emojis or hashtags\n`;
     prompt += `- Avoids spam or promotional language\n\n`;
     prompt += `Reply:`;
     
@@ -102,7 +104,7 @@ export class AIReplyService {
     
     // Predefined thoughtful responses based on content analysis
     const responses = [
-      "Interesting perspective! 👍",
+      "Interesting perspective!",
       "Thanks for sharing this insight!",
       "Great point about this topic!",
       "This is really valuable information.",
@@ -126,11 +128,11 @@ export class AIReplyService {
     }
     
     if (tweet.includes('blockchain') || tweet.includes('crypto') || tweet.includes('defi')) {
-      return "The blockchain space continues to evolve rapidly. Exciting developments!";
+      return "The blockchain space continues to evolve rapidly. Exciting developments ahead.";
     }
     
     if (tweet.includes('chainlink') || tweet.includes('oracle')) {
-      return "Oracle technology is really changing how smart contracts can access real-world data.";
+      return "Oracle technology is really changing how smart contracts access real-world data.";
     }
     
     // Default to random thoughtful response
@@ -140,24 +142,24 @@ export class AIReplyService {
   async generateQuoteTweet(context: ReplyContext): Promise<string | null> {
     if (!this.openaiApiKey) {
       const fallbacks = [
-        "This is exactly what we need to see more of! 🚀",
-        "Great insights from the community! 💡",
+        "This is exactly what we need to see more of.",
+        "Great insights from the community.",
         "Building on this important discussion...",
-        "Adding this to the conversation 👇"
+        "Adding this to the conversation."
       ];
       return fallbacks[Math.floor(Math.random() * fallbacks.length)];
     }
 
     // Similar AI generation for quote tweets but shorter
     try {
-      const prompt = `Create a brief quote tweet comment (under 200 chars) for this tweet: "${context.originalTweet.text}". Mission: ${context.missionObjective}`;
+      const prompt = `Create a brief quote tweet comment (under 200 chars, 2-4 sentences, no emojis) for this tweet: "${context.originalTweet.text}". Mission: ${context.missionObjective}`;
       
       const response = await axios.post('https://api.openai.com/v1/chat/completions', {
         model: 'gpt-3.5-turbo',
         messages: [
           {
             role: 'system',
-            content: 'Generate brief, engaging quote tweet comments that add value. Keep under 200 characters.'
+            content: 'Generate brief, engaging quote tweet comments that add value. Keep under 200 characters with 2-4 sentences maximum. Never use emojis.'
           },
           { role: 'user', content: prompt }
         ],
@@ -172,7 +174,7 @@ export class AIReplyService {
 
       return response.data.choices[0]?.message?.content?.trim() || null;
     } catch (error) {
-      return "Adding to this important conversation! 💭";
+      return "Adding to this important conversation.";
     }
   }
 }

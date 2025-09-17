@@ -21,6 +21,13 @@ export interface IMission extends Document {
   intentDescription: string;
   missionType: 'engage' | 'post' | 'hybrid'; // New: defines mission behavior
   
+  // Content Type Preferences
+  contentTypes: {
+    posts: boolean;
+    replies: boolean;
+    quoteTweets: boolean;
+  };
+  
   // Scheduling
   repeatSchedule: string; // cron string
   active: boolean;
@@ -73,6 +80,13 @@ const missionSchema = new Schema<IMission>({
   objective: { type: String, required: true },
   intentDescription: { type: String, required: true },
   missionType: { type: String, enum: ['engage', 'post', 'hybrid'], default: 'engage' },
+  
+  // Content Type Preferences
+  contentTypes: {
+    posts: { type: Boolean, default: true },
+    replies: { type: Boolean, default: true },
+    quoteTweets: { type: Boolean, default: true }
+  },
   
   // Scheduling
   repeatSchedule: { type: String, required: true },

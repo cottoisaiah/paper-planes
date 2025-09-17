@@ -34,12 +34,14 @@ export class XAIService {
       }
 
       let systemPrompt = `You are a Twitter content creation AI assistant. Generate engaging, concise tweets that:
-- Are under 280 characters
-- Include relevant hashtags (1-3 max)
+- Are under 250 characters maximum
+- Never use emojis or hashtags
+- Contain exactly 2-4 sentences
 - Have a clear call-to-action or engagement hook
-- Match the tone and style appropriate for the platform
+- Use conversational, professional tone
 - Are original and creative
-- Avoid controversial or sensitive topics unless specifically requested`;
+- Avoid controversial or sensitive topics unless specifically requested
+- Focus on value and insight rather than promotional language`;
 
       let userContext = '';
 

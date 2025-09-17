@@ -145,6 +145,12 @@ class PaperPlanePilot {
   private async executePostMission(): Promise<void> {
     console.log(`📝 Executing post mission with ${this.mission.posts.length} queued posts`);
     
+    // Check if posts are enabled in content type preferences
+    if (this.mission.contentTypes && !this.mission.contentTypes.posts) {
+      console.log(`📭 Posts disabled in mission content type preferences`);
+      return;
+    }
+    
     if (!this.mission.posts || this.mission.posts.length === 0) {
       console.log(`📭 No posts queued for this mission`);
       return;
@@ -297,6 +303,16 @@ class PaperPlanePilot {
   }
 
   private async executeAction(action: any, tweet: Tweet): Promise<boolean> {
+    // Check if this content type is enabled in mission preferences
+    if (this.mission.contentTypes) {
+      if (action.type === 'reply' && !this.mission.contentTypes.replies) {
+        return false;
+      }
+      if (action.type === 'quote' && !this.mission.contentTypes.quoteTweets) {
+        return false;
+      }
+    }
+    
     switch (action.type) {
       case 'like':
         return await this.likeTweet(tweet.id);
