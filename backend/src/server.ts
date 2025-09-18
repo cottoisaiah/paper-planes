@@ -1,7 +1,11 @@
 import dotenv from 'dotenv';
 
-// Load environment variables first
-dotenv.config();
+// Load environment variables first - use production config if NODE_ENV is production
+if (process.env.NODE_ENV === 'production') {
+  dotenv.config({ path: '.env.production' });
+} else {
+  dotenv.config();
+}
 
 import express from 'express';
 import mongoose from 'mongoose';

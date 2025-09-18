@@ -18,6 +18,7 @@ class LogStreamService extends EventEmitter {
   private logHistory: LogEntry[] = [];
   private maxHistorySize = 1000;
   private originalConsole: any = {};
+  private isProcessingConsole = false; // Prevent recursion
 
   private constructor() {
     super();
@@ -84,6 +85,11 @@ class LogStreamService extends EventEmitter {
   }
 
   private logFromConsole(level: LogEntry['level'], args: any[]): void {
+    // Prevent recursion by checking if we're already processing console output
+    if (this.isProcessingConsole) {
+      return;
+    }
+
     const message = args.map(arg => 
       typeof arg === 'object' ? JSON.stringify(arg, null, 2) : String(arg)
     ).join(' ');
@@ -115,7 +121,8 @@ class LogStreamService extends EventEmitter {
 
     // Don't log WebSocket connection messages to avoid loops
     if (message.includes('Admin client') || message.includes('WebSocket') || 
-        message.includes('Log streaming') || message.includes('📱')) {
+        message.includes('Log streaming') || message.includes('📱') ||
+        message.includes('Metadata:')) {
       return;
     }
 
@@ -129,7 +136,7 @@ class LogStreamService extends EventEmitter {
       detectedLevel = 'warning';
     }
 
-    this.log({
+    this.logDirectly({
       level: detectedLevel,
       category,
       message,
@@ -163,11 +170,35 @@ class LogStreamService extends EventEmitter {
     // Broadcast to all connected clients
     this.broadcast(logEntry);
 
-    // Also log to console with formatting
-    this.logToConsole(logEntry);
+    // Only log to console if we're not already processing console output
+    if (!this.isProcessingConsole) {
+      this.logToConsole(logEntry);
+    }
+  }
+
+  /**
+   * Log directly without sending to console to prevent recursion
+   */
+  private logDirectly(entry: Omit<LogEntry, 'timestamp'>): void {
+    const logEntry: LogEntry = {
+      ...entry,
+      timestamp: new Date().toISOString()
+    };
+
+    // Add to history
+    this.logHistory.push(logEntry);
+    if (this.logHistory.length > this.maxHistorySize) {
+      this.logHistory.shift();
+    }
+
+    // Broadcast to all connected clients only
+    this.broadcast(logEntry);
   }
 
   private logToConsole(entry: LogEntry): void {
+    // Set flag to prevent recursion
+    this.isProcessingConsole = true;
+
     const timestamp = new Date(entry.timestamp).toLocaleTimeString();
     const categoryIcon = this.getCategoryIcon(entry.category);
     const levelIcon = this.getLevelIcon(entry.level);
@@ -175,9 +206,8 @@ class LogStreamService extends EventEmitter {
     // Use original console methods to avoid recursion
     this.originalConsole.log(`${timestamp} ${categoryIcon} ${levelIcon} ${entry.message}`);
     
-    if (entry.metadata) {
-      this.originalConsole.log('   📊 Metadata:', entry.metadata);
-    }
+    // Reset flag after logging
+    this.isProcessingConsole = false;
   }
 
   private getCategoryIcon(category: string): string {

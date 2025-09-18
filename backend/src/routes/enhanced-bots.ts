@@ -38,10 +38,10 @@ const initializeActiveMissions = async () => {
     
     for (const mission of activeMissions) {
       const twitterClient = new TwitterApi({
-        appKey: process.env.TWITTER_API_KEY!,
-        appSecret: process.env.TWITTER_API_SECRET!,
-        accessToken: process.env.TWITTER_ACCESS_TOKEN!,
-        accessSecret: process.env.TWITTER_ACCESS_TOKEN_SECRET!,
+        appKey: process.env.X_API_KEY!,
+        appSecret: process.env.X_API_KEY_SECRET!,
+        accessToken: process.env.X_ACCESS_TOKEN!,
+        accessSecret: process.env.X_ACCESS_TOKEN_SECRET!,
       });
 
       const executeMission = async () => {
@@ -149,6 +149,9 @@ class PaperPlanePilot {
   private async executeEngagementMission(): Promise<void> {
     console.log(`🎯 Executing engagement mission with ${this.mission.targetQueries.length} target queries`);
     
+    // Intelligent query optimization: derive contextual queries if needed
+    const optimizedQueries = await this.optimizeTargetQueries();
+    
     // Enforce content quotas - minimum requirements
     const quotas = this.mission.contentQuotas || {
       postsPerRun: 1,
@@ -164,7 +167,7 @@ class PaperPlanePilot {
     const minQuotes = quotas.quotesPerRun;
     const maxEngagements = this.mission.maxEngagementsPerRun || 10;
     
-    for (const query of this.mission.targetQueries) {
+    for (const query of optimizedQueries) {
       if (totalReplies >= minReplies && totalQuotes >= minQuotes) {
         console.log(`✅ Content quotas fulfilled: ${totalReplies}/${minReplies} replies, ${totalQuotes}/${minQuotes} quotes`);
         break;
@@ -257,6 +260,112 @@ class PaperPlanePilot {
     this.mission.maxEngagementsPerRun = originalMaxEngagements;
   }
 
+  /**
+   * Optimize target queries for better semantic alignment with mission objective
+   * Creates Nash equilibrium between tweet sourcing and engagement strategy
+   */
+  private async optimizeTargetQueries(): Promise<string[]> {
+    const missionObjective = this.mission.description || this.mission.objective || '';
+    const currentQueries = this.mission.targetQueries || [];
+    
+    // Check if current queries are semantically aligned with mission objective
+    const alignmentScore = await this.assessQueryAlignment(missionObjective, currentQueries);
+    
+    console.log(`🔍 Query alignment score: ${alignmentScore}/100`);
+    
+    // If alignment is poor (< 40%), derive contextual queries from mission objective
+    if (alignmentScore < 40) {
+      console.log(`⚡ Deriving optimized queries from mission objective due to low alignment`);
+      const optimizedQueries = await this.deriveContextualQueries(missionObjective);
+      
+      // Blend optimized queries with strategic keywords for balanced sourcing
+      const strategicTerms = this.mission.strategicKeywords || [];
+      const blendedQueries = [...optimizedQueries, ...strategicTerms.slice(0, 3)];
+      
+      console.log(`🎯 Using ${blendedQueries.length} optimized queries for Core Propulsion System`);
+      return blendedQueries.slice(0, 8); // Limit to 8 queries for performance
+    }
+    
+    return currentQueries;
+  }
+
+  /**
+   * Assess semantic alignment between mission objective and target queries
+   */
+  private async assessQueryAlignment(objective: string, queries: string[]): Promise<number> {
+    if (!objective || queries.length === 0) return 0;
+    
+    try {
+      const prompt = `Rate the semantic alignment between this mission objective and target queries on a scale of 0-100:
+
+Mission Objective: "${objective}"
+Target Queries: ${queries.map(q => `"${q}"`).join(', ')}
+
+Consider:
+- Do the queries help find tweets relevant to the mission?
+- Are they contextually appropriate for the objective?
+- Would they source tweets the mission could meaningfully engage with?
+
+Return only a number from 0-100.`;
+
+      const result = await this.xaiService.generateContent({
+        prompt,
+        userId: 'system',
+        maxTokens: 50,
+        temperature: 0.1
+      });
+      
+      if (!result) return 50;
+      
+      const score = parseInt(result.content.match(/\d+/)?.[0] || '0');
+      return Math.min(Math.max(score, 0), 100);
+    } catch (error) {
+      console.log(`❌ Alignment assessment failed: ${error}`);
+      return 50; // Default to moderate alignment
+    }
+  }
+
+  /**
+   * Derive contextual search queries from mission objective
+   */
+  private async deriveContextualQueries(objective: string): Promise<string[]> {
+    try {
+      const prompt = `Given this mission objective, generate 5-6 contextual search queries that would help find relevant tweets to engage with:
+
+Mission Objective: "${objective}"
+
+Requirements:
+- Queries should find tweets this mission could meaningfully engage with
+- Focus on topics, keywords, and hashtags related to the objective
+- Consider community discussions, technical topics, and industry conversations
+- Avoid overly broad or unrelated terms
+
+Return only the queries, one per line, without quotes or numbering.`;
+
+      const result = await this.xaiService.generateContent({
+        prompt,
+        userId: 'system',
+        maxTokens: 200,
+        temperature: 0.3
+      });
+      
+      if (!result) {
+        return this.mission.strategicKeywords || ['AI', 'crypto', 'blockchain'];
+      }
+      
+      const queries = result.content.split('\n')
+        .map((q: string) => q.trim())
+        .filter((q: string) => q.length > 0 && !q.match(/^\d+\.?\s*/))
+        .slice(0, 6);
+      
+      console.log(`🔄 Generated ${queries.length} contextual queries from mission objective`);
+      return queries;
+    } catch (error) {
+      console.log(`❌ Query derivation failed: ${error}`);
+      return this.mission.strategicKeywords || ['AI', 'crypto', 'blockchain'];
+    }
+  }
+
   private async searchTweets(query: string): Promise<Tweet[]> {
     if (!this.canMakeRequest('search')) {
       throw new Error('Search rate limit reached');
@@ -318,7 +427,7 @@ class PaperPlanePilot {
           tweet.public_metrics
         );
         
-        if (relevanceCheck.isRelevant && relevanceCheck.totalScore >= 60) {
+        if (relevanceCheck.isRelevant && relevanceCheck.totalScore >= 35) {
           relevantTweets.push(tweet);
           console.log(`   ✅ Relevant (${relevanceCheck.totalScore}/100): Topic:${relevanceCheck.breakdown.topicRelevance} Engagement:${relevanceCheck.breakdown.engagementPotential} Community:${relevanceCheck.breakdown.communityFit} Timing:${relevanceCheck.breakdown.timingOptimization} - ${tweet.text.substring(0, 80)}...`);
         } else {
@@ -978,10 +1087,10 @@ router.post('/start/:missionId', authenticate, async (req: any, res) => {
     }
 
     const twitterClient = new TwitterApi({
-      appKey: process.env.TWITTER_API_KEY!,
-      appSecret: process.env.TWITTER_API_SECRET!,
-      accessToken: process.env.TWITTER_ACCESS_TOKEN!,
-      accessSecret: process.env.TWITTER_ACCESS_TOKEN_SECRET!,
+      appKey: process.env.X_API_KEY!,
+      appSecret: process.env.X_API_KEY_SECRET!,
+      accessToken: process.env.X_ACCESS_TOKEN!,
+      accessSecret: process.env.X_ACCESS_TOKEN_SECRET!,
     });
 
     console.log(`🛩️  Starting mission: ${mission.objective}`);
@@ -1066,10 +1175,10 @@ router.post('/emergency-start/:missionId', async (req: any, res) => {
     if (!mission) return res.status(404).json({ message: 'Mission not found' });
 
     const twitterClient = new TwitterApi({
-      appKey: process.env.TWITTER_API_KEY!,
-      appSecret: process.env.TWITTER_API_SECRET!,
-      accessToken: process.env.TWITTER_ACCESS_TOKEN!,
-      accessSecret: process.env.TWITTER_ACCESS_TOKEN_SECRET!,
+      appKey: process.env.X_API_KEY!,
+      appSecret: process.env.X_API_KEY_SECRET!,
+      accessToken: process.env.X_ACCESS_TOKEN!,
+      accessSecret: process.env.X_ACCESS_TOKEN_SECRET!,
     });
 
     console.log(`🛩️  Emergency deployment: ${mission.objective}`);
