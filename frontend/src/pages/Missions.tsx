@@ -28,7 +28,7 @@ import {
   Checkbox,
   FormGroup
 } from '@mui/material';
-import { Add, Edit, Delete, PlayArrow, Stop } from '@mui/icons-material';
+import { Add, Edit, Delete, PlayArrow, Stop, FileCopy } from '@mui/icons-material';
 import axios from 'axios';
 import { toast } from 'react-toastify';
 
@@ -248,6 +248,54 @@ const Missions = () => {
     }
   };
 
+  const handleDuplicateMission = (mission: Mission) => {
+    // Parse existing cron back to form data (same logic as handleEditMission)
+    let scheduleType = 'daily';
+    let scheduleTime = '12:00';
+    let customCron = mission.repeatSchedule;
+    
+    const parts = mission.repeatSchedule.split(' ');
+    if (parts.length >= 5) {
+      const minute = parts[0];
+      const hour = parts[1];
+      const dayOfWeek = parts[4];
+      
+      if (hour !== '*' && minute !== '*') {
+        scheduleTime = `${hour.padStart(2, '0')}:${minute.padStart(2, '0')}`;
+        if (dayOfWeek === '0') {
+          scheduleType = 'weekly';
+        } else if (parts[2] === '1') {
+          scheduleType = 'monthly';
+        } else {
+          scheduleType = 'daily';
+        }
+      } else if (hour === '*') {
+        scheduleType = 'hourly';
+        scheduleTime = `00:${minute.padStart(2, '0')}`;
+      } else {
+        scheduleType = 'custom';
+      }
+    }
+    
+    // Create form data with duplicated mission but with "(Copy)" suffix
+    setFormData({
+      objective: `${mission.objective} (Copy)`,
+      intentDescription: mission.intentDescription,
+      scheduleType,
+      scheduleTime,
+      customCron,
+      targetQueries: mission.targetQueries.join(', '),
+      contentTypes: mission.contentTypes || {
+        posts: true,
+        replies: true,
+        quoteTweets: true
+      }
+    });
+    setSelectedMission(null); // Treat as new mission
+    setDialogOpen(true);
+    toast.info('Mission duplicated - ready to customize');
+  };
+
   const handleToggleMission = async (missionId: string, active: boolean) => {
     try {
       const token = localStorage.getItem('token');
@@ -329,6 +377,14 @@ const Missions = () => {
                         onClick={() => handleEditMission(mission)}
                       >
                         <Edit />
+                      </IconButton>
+                      <IconButton
+                        size="small"
+                        onClick={() => handleDuplicateMission(mission)}
+                        color="info"
+                        title="Duplicate Mission"
+                      >
+                        <FileCopy />
                       </IconButton>
                       <IconButton
                         size="small"

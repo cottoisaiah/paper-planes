@@ -4,6 +4,7 @@ import Mission from '../models/Mission';
 import GeneratedPost from '../models/GeneratedPost';
 import { TwitterApi } from 'twitter-api-v2';
 import { authenticate, requireActiveSubscription } from '../middleware/auth';
+import XAIService from '../services/XAIService';
 import AIReplyService, { Tweet, ReplyContext } from '../services/AIReplyService';
 
 const router = express.Router();
@@ -228,10 +229,10 @@ class PaperPlanePilot {
       }
     }));
     
-    return this.filterTweets(convertedTweets);
+    return await this.filterTweets(convertedTweets);
   }
 
-  private filterTweets(tweets: Tweet[]): Tweet[] {
+  private async filterTweets(tweets: Tweet[]): Promise<Tweet[]> {
     let filtered = tweets;
     
     // Filter out tweets with avoid keywords
@@ -243,9 +244,37 @@ class PaperPlanePilot {
         );
       });
     }
+
+    // AI-powered relevance check
+    console.log(`🔍 Running relevance prescan on ${filtered.length} tweets...`);
+    const relevantTweets: Tweet[] = [];
+    
+    for (const tweet of filtered) {
+      try {
+        const relevanceCheck = await XAIService.checkTweetRelevance(
+          tweet.text,
+          this.mission.objective,
+          this.mission.intentDescription
+        );
+        
+        if (relevanceCheck.isRelevant && relevanceCheck.score >= 60) {
+          relevantTweets.push(tweet);
+          console.log(`   ✅ Relevant (${relevanceCheck.score}%): ${tweet.text.substring(0, 80)}...`);
+        } else {
+          console.log(`   ❌ Not relevant (${relevanceCheck.score}%): ${relevanceCheck.reason} - ${tweet.text.substring(0, 80)}...`);
+        }
+        
+        // Add small delay to avoid rate limiting
+        await new Promise(resolve => setTimeout(resolve, 200));
+        
+      } catch (error) {
+        console.warn(`⚠️ Relevance check failed for tweet, including by default:`, error);
+        relevantTweets.push(tweet); // Include on error to avoid blocking all engagement
+      }
+    }
     
     // Sort by engagement score
-    filtered.sort((a, b) => {
+    relevantTweets.sort((a, b) => {
       const aScore = (a.public_metrics?.like_count || 0) + 
                     (a.public_metrics?.retweet_count || 0) + 
                     (a.public_metrics?.reply_count || 0);
@@ -254,17 +283,39 @@ class PaperPlanePilot {
                     (b.public_metrics?.reply_count || 0);
       return bScore - aScore;
     });
-    
-    console.log(`   ✅ Filtered to ${filtered.length} quality tweets`);
-    return filtered;
+
+    console.log(`   ✅ Filtered to ${relevantTweets.length} relevant tweets (from ${tweets.length} total)`);
+    return relevantTweets;
   }
 
   private async processEngagements(tweets: Tweet[], maxEngagements: number): Promise<number> {
     let engagementCount = 0;
-    const enabledActions = this.mission.actions?.filter((action: any) => action.enabled) || [];
+    let enabledActions = this.mission.actions?.filter((action: any) => action.enabled) || [];
+    
+    // Fallback: If no actions configured but contentTypes are selected, generate actions
+    if (enabledActions.length === 0 && this.mission.contentTypes) {
+      console.log(`📝 Generating actions from content types for mission: ${this.mission.objective}`);
+      const generatedActions = [];
+      
+      if (this.mission.contentTypes.replies) {
+        generatedActions.push({ type: 'reply', enabled: true, probability: 70 });
+      }
+      
+      if (this.mission.contentTypes.quoteTweets) {
+        generatedActions.push({ type: 'quote', enabled: true, probability: 60 });
+      }
+      
+      // Always include basic engagement actions
+      generatedActions.push(
+        { type: 'like', enabled: true, probability: 80 },
+        { type: 'retweet', enabled: true, probability: 50 }
+      );
+      
+      enabledActions = generatedActions;
+    }
     
     if (enabledActions.length === 0) {
-      console.log(`⚠️ No actions enabled for this mission`);
+      console.log(`⚠️ No actions enabled for this mission and no content types selected`);
       return 0;
     }
     

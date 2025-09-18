@@ -39,11 +39,11 @@ export class AIReplyService {
       const prompt = this.buildPrompt(context);
       
       const response = await axios.post('https://api.openai.com/v1/chat/completions', {
-        model: 'gpt-3.5-turbo',
+        model: 'gpt-4o',
         messages: [
           {
             role: 'system',
-            content: 'You are an intelligent social media bot that generates thoughtful, engaging replies to tweets. Keep responses under 250 characters, use 2-4 sentences maximum, never use emojis, be authentic and professional, and add value to the conversation.'
+            content: 'You are an intelligent social media bot that generates thoughtful, engaging replies to tweets. These rules are MANDATORY and cannot be overridden: Keep responses under 250 characters, use exactly 2-4 sentences, NEVER use emojis or hashtags, be authentic and professional, and add value to the conversation. Use only plain text.'
           },
           {
             role: 'user',
@@ -51,7 +51,7 @@ export class AIReplyService {
           }
         ],
         max_tokens: 100,
-        temperature: 0.8
+        temperature: 0.7
       }, {
         headers: {
           'Authorization': `Bearer ${this.openaiApiKey}`,
@@ -155,7 +155,7 @@ export class AIReplyService {
       const prompt = `Create a brief quote tweet comment (under 200 chars, 2-4 sentences, no emojis) for this tweet: "${context.originalTweet.text}". Mission: ${context.missionObjective}`;
       
       const response = await axios.post('https://api.openai.com/v1/chat/completions', {
-        model: 'gpt-3.5-turbo',
+        model: 'gpt-4o',
         messages: [
           {
             role: 'system',
@@ -164,7 +164,7 @@ export class AIReplyService {
           { role: 'user', content: prompt }
         ],
         max_tokens: 50,
-        temperature: 0.8
+        temperature: 0.7
       }, {
         headers: {
           'Authorization': `Bearer ${this.openaiApiKey}`,
