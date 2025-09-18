@@ -28,6 +28,16 @@ export interface IMission extends Document {
     quoteTweets: boolean;
   };
   
+  // Content Generation Quotas
+  contentQuotas: {
+    postsPerRun: number; // 1-3 posts per mission run
+    repliesPerRun: number; // 1-10 replies per mission run  
+    quotesPerRun: number; // 0-1 quotes per mission run
+  };
+  
+  // Strategic Keywords for Algorithmic Relevancy
+  strategicKeywords: string[]; // Keywords to integrate naturally for better reach
+  
   // Scheduling
   repeatSchedule: string; // cron string
   active: boolean;
@@ -96,6 +106,16 @@ const missionSchema = new Schema<IMission>({
     replies: { type: Boolean, default: true },
     quoteTweets: { type: Boolean, default: true }
   },
+  
+  // Content Generation Quotas
+  contentQuotas: {
+    postsPerRun: { type: Number, min: 1, max: 3, default: 1 },
+    repliesPerRun: { type: Number, min: 1, max: 10, default: 3 },
+    quotesPerRun: { type: Number, min: 0, max: 1, default: 1 }
+  },
+  
+  // Strategic Keywords for Algorithmic Relevancy
+  strategicKeywords: [{ type: String }],
   
   // Scheduling
   repeatSchedule: { type: String, required: true },

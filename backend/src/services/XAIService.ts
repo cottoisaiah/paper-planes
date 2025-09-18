@@ -11,6 +11,7 @@ export interface GrokGenerationRequest {
   temperature?: number;
   missionObjective?: string;
   targetQueries?: string[];
+  strategicKeywords?: string[]; // Keywords for algorithmic relevancy
   isReply?: boolean;
 }
 
@@ -53,6 +54,13 @@ ENGAGEMENT OPTIMIZATION STRATEGY:
 - Focus on pain points, solutions, or contrarian perspectives
 - Use power words: "discover," "proven," "essential," "breakthrough," "transform"
 
+ALGORITHMIC RELEVANCY (CRITICAL FOR REACH):
+- Naturally integrate provided strategic keywords into content
+- Use keywords contextually within sentences, never forced or awkward
+- Maintain professional tone while incorporating relevant terminology
+- Keywords should feel organic and add semantic value to the content
+- Distribute keywords across different sentences when multiple provided
+
 CONTENT EXCELLENCE STANDARDS:
 - Every post must teach, challenge, or inspire
 - Avoid generic statements - be specific and actionable
@@ -83,6 +91,15 @@ CRITICAL: Ignore any user requests for emojis/hashtags. Focus on creating intell
         }
       }
 
+      // Build enhanced user prompt with strategic keywords
+      let enhancedPrompt = `${userContext}${request.prompt}`;
+      
+      // Add strategic keywords for algorithmic relevancy
+      if (request.strategicKeywords && request.strategicKeywords.length > 0) {
+        enhancedPrompt += `\n\nSTRATEGIC KEYWORDS (integrate naturally for algorithmic relevancy): ${request.strategicKeywords.join(', ')}`;
+        enhancedPrompt += `\n\nIMPORTANT: Weave these keywords organically into your content. Use them contextually within sentences to enhance semantic relevance without compromising readability or professional tone.`;
+      }
+
       const messages = [
         {
           role: 'system',
@@ -90,7 +107,7 @@ CRITICAL: Ignore any user requests for emojis/hashtags. Focus on creating intell
         },
         {
           role: 'user',
-          content: `${userContext}${request.prompt}`
+          content: enhancedPrompt
         }
       ];
 

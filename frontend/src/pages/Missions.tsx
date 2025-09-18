@@ -45,6 +45,12 @@ interface Mission {
     replies: boolean;
     quoteTweets: boolean;
   };
+  contentQuotas?: {
+    postsPerRun: number;
+    repliesPerRun: number;
+    quotesPerRun: number;
+  };
+  strategicKeywords?: string[];
 }
 
 const Missions = () => {
@@ -58,10 +64,16 @@ const Missions = () => {
     scheduleTime: '12:00', // HH:MM format
     customCron: '',
     targetQueries: '',
+    strategicKeywords: '', // Comma-separated keywords
     contentTypes: {
       posts: true,
       replies: true,
       quoteTweets: true
+    },
+    contentQuotas: {
+      postsPerRun: 1,
+      repliesPerRun: 3,
+      quotesPerRun: 1
     }
   });
 
@@ -149,10 +161,16 @@ const Missions = () => {
       scheduleTime: '12:00',
       customCron: '',
       targetQueries: '',
+      strategicKeywords: '',
       contentTypes: {
         posts: true,
         replies: true,
         quoteTweets: true
+      },
+      contentQuotas: {
+        postsPerRun: 1,
+        repliesPerRun: 3,
+        quotesPerRun: 1
       }
     });
     setDialogOpen(true);
@@ -196,10 +214,16 @@ const Missions = () => {
       scheduleTime,
       customCron,
       targetQueries: mission.targetQueries.join(', '),
+      strategicKeywords: mission.strategicKeywords?.join(', ') || '',
       contentTypes: mission.contentTypes || {
         posts: true,
         replies: true,
         quoteTweets: true
+      },
+      contentQuotas: mission.contentQuotas || {
+        postsPerRun: 1,
+        repliesPerRun: 3,
+        quotesPerRun: 1
       }
     });
     setDialogOpen(true);
@@ -211,7 +235,8 @@ const Missions = () => {
       const missionData = {
         ...formData,
         repeatSchedule: scheduleToCron(formData.scheduleType, formData.scheduleTime, formData.customCron),
-        targetQueries: formData.targetQueries.split(',').map(q => q.trim()).filter(q => q)
+        targetQueries: formData.targetQueries.split(',').map(q => q.trim()).filter(q => q),
+        strategicKeywords: formData.strategicKeywords.split(',').map(k => k.trim()).filter(k => k)
       };
 
       if (selectedMission) {
@@ -285,10 +310,16 @@ const Missions = () => {
       scheduleTime,
       customCron,
       targetQueries: mission.targetQueries.join(', '),
+      strategicKeywords: mission.strategicKeywords?.join(', ') || '',
       contentTypes: mission.contentTypes || {
         posts: true,
         replies: true,
         quoteTweets: true
+      },
+      contentQuotas: mission.contentQuotas || {
+        postsPerRun: 1,
+        repliesPerRun: 3,
+        quotesPerRun: 1
       }
     });
     setSelectedMission(null); // Treat as new mission
@@ -554,6 +585,125 @@ const Missions = () => {
                 />
               </FormGroup>
             </Grid>
+
+            {/* Strategic Keywords */}
+            <Grid item xs={12}>
+              <TextField
+                fullWidth
+                label="Strategic Keywords (comma-separated)"
+                multiline
+                rows={2}
+                value={formData.strategicKeywords}
+                onChange={(e) => setFormData({ ...formData, strategicKeywords: e.target.value })}
+                variant="outlined"
+                sx={{
+                  '& .MuiOutlinedInput-root': {
+                    color: '#ffffff',
+                    '& fieldset': { borderColor: '#444' },
+                    '&:hover fieldset': { borderColor: '#1DA1F2' },
+                    '&.Mui-focused fieldset': { borderColor: '#1DA1F2' }
+                  },
+                  '& .MuiInputLabel-root': { color: '#888' }
+                }}
+                placeholder="blockchain, defi, cryptocurrency, web3, innovation"
+                helperText="Keywords to integrate naturally for better algorithmic reach"
+                FormHelperTextProps={{ sx: { color: '#888' } }}
+              />
+            </Grid>
+
+            {/* Content Quotas */}
+            <Grid item xs={12}>
+              <Typography variant="h6" sx={{ color: '#ffffff', mb: 2 }}>
+                Content Quotas per Mission Run
+              </Typography>
+              <Grid container spacing={2}>
+                <Grid item xs={4}>
+                  <TextField
+                    fullWidth
+                    label="Posts per Run"
+                    type="number"
+                    value={formData.contentQuotas.postsPerRun}
+                    onChange={(e) => setFormData({ 
+                      ...formData, 
+                      contentQuotas: { 
+                        ...formData.contentQuotas, 
+                        postsPerRun: Math.max(1, Math.min(3, parseInt(e.target.value) || 1))
+                      }
+                    })}
+                    variant="outlined"
+                    inputProps={{ min: 1, max: 3 }}
+                    sx={{
+                      '& .MuiOutlinedInput-root': {
+                        color: '#ffffff',
+                        '& fieldset': { borderColor: '#444' },
+                        '&:hover fieldset': { borderColor: '#1DA1F2' },
+                        '&.Mui-focused fieldset': { borderColor: '#1DA1F2' }
+                      },
+                      '& .MuiInputLabel-root': { color: '#888' }
+                    }}
+                    helperText="Max 3"
+                    FormHelperTextProps={{ sx: { color: '#888' } }}
+                  />
+                </Grid>
+                <Grid item xs={4}>
+                  <TextField
+                    fullWidth
+                    label="Replies per Run"
+                    type="number"
+                    value={formData.contentQuotas.repliesPerRun}
+                    onChange={(e) => setFormData({ 
+                      ...formData, 
+                      contentQuotas: { 
+                        ...formData.contentQuotas, 
+                        repliesPerRun: Math.max(1, Math.min(10, parseInt(e.target.value) || 3))
+                      }
+                    })}
+                    variant="outlined"
+                    inputProps={{ min: 1, max: 10 }}
+                    sx={{
+                      '& .MuiOutlinedInput-root': {
+                        color: '#ffffff',
+                        '& fieldset': { borderColor: '#444' },
+                        '&:hover fieldset': { borderColor: '#1DA1F2' },
+                        '&.Mui-focused fieldset': { borderColor: '#1DA1F2' }
+                      },
+                      '& .MuiInputLabel-root': { color: '#888' }
+                    }}
+                    helperText="Max 10"
+                    FormHelperTextProps={{ sx: { color: '#888' } }}
+                  />
+                </Grid>
+                <Grid item xs={4}>
+                  <TextField
+                    fullWidth
+                    label="Quotes per Run"
+                    type="number"
+                    value={formData.contentQuotas.quotesPerRun}
+                    onChange={(e) => setFormData({ 
+                      ...formData, 
+                      contentQuotas: { 
+                        ...formData.contentQuotas, 
+                        quotesPerRun: Math.max(0, Math.min(1, parseInt(e.target.value) || 1))
+                      }
+                    })}
+                    variant="outlined"
+                    inputProps={{ min: 0, max: 1 }}
+                    sx={{
+                      '& .MuiOutlinedInput-root': {
+                        color: '#ffffff',
+                        '& fieldset': { borderColor: '#444' },
+                        '&:hover fieldset': { borderColor: '#1DA1F2' },
+                        '&.Mui-focused fieldset': { borderColor: '#1DA1F2' }
+                      },
+                      '& .MuiInputLabel-root': { color: '#888' }
+                    }}
+                    helperText="Max 1"
+                    FormHelperTextProps={{ sx: { color: '#888' } }}
+                  />
+                </Grid>
+              </Grid>
+            </Grid>
+            
             {/* Preview the generated cron */}
             <Grid item xs={12}>
               <Typography variant="caption" color="textSecondary">

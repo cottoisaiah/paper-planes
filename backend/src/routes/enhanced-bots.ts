@@ -4,7 +4,7 @@ import Mission from '../models/Mission';
 import GeneratedPost from '../models/GeneratedPost';
 import { TwitterApi } from 'twitter-api-v2';
 import { authenticate, requireActiveSubscription } from '../middleware/auth';
-import XAIService from '../services/XAIService';
+import { XAIService } from '../services/XAIService';
 import { AIReplyService, ReplyContext } from '../services/AIReplyService';
 import PersonalityService from '../services/PersonalityService';
 import { ThreadIntelligenceService } from '../services/ThreadIntelligenceService';
@@ -95,12 +95,14 @@ class PaperPlanePilot {
   
   private replyService: AIReplyService;
   private threadIntelligence: ThreadIntelligenceService;
+  private xaiService: XAIService;
 
   constructor(twitterClient: TwitterApi, mission: any) {
     this.twitterClient = twitterClient;
     this.mission = mission;
     this.replyService = new AIReplyService();
     this.threadIntelligence = new ThreadIntelligenceService(twitterClient);
+    this.xaiService = new XAIService();
   }
 
   async executeMission(): Promise<void> {
@@ -136,19 +138,38 @@ class PaperPlanePilot {
   private async executeEngagementMission(): Promise<void> {
     console.log(`🎯 Executing engagement mission with ${this.mission.targetQueries.length} target queries`);
     
-    let totalEngagements = 0;
+    // Enforce content quotas - minimum requirements
+    const quotas = this.mission.contentQuotas || {
+      postsPerRun: 1,
+      repliesPerRun: 3,
+      quotesPerRun: 1
+    };
+    
+    console.log(`📊 Content quotas: ${quotas.repliesPerRun} replies, ${quotas.quotesPerRun} quotes minimum`);
+    
+    let totalReplies = 0;
+    let totalQuotes = 0;
+    const minReplies = quotas.repliesPerRun;
+    const minQuotes = quotas.quotesPerRun;
     const maxEngagements = this.mission.maxEngagementsPerRun || 10;
     
     for (const query of this.mission.targetQueries) {
-      if (totalEngagements >= maxEngagements) {
-        console.log(`🛑 Reached max engagements (${maxEngagements}), stopping`);
+      if (totalReplies >= minReplies && totalQuotes >= minQuotes) {
+        console.log(`✅ Content quotas fulfilled: ${totalReplies}/${minReplies} replies, ${totalQuotes}/${minQuotes} quotes`);
         break;
       }
       
       try {
         const tweets = await this.searchTweets(query);
-        const engagements = await this.processEngagements(tweets, maxEngagements - totalEngagements);
-        totalEngagements += engagements;
+        const { replies, quotes } = await this.processEngagementsWithQuotas(
+          tweets, 
+          minReplies - totalReplies, 
+          minQuotes - totalQuotes,
+          maxEngagements
+        );
+        
+        totalReplies += replies;
+        totalQuotes += quotes;
         
         // Delay between queries to be respectful
         await this.delay(3000);
@@ -162,7 +183,12 @@ class PaperPlanePilot {
       }
     }
     
-    console.log(`📊 Total engagements completed: ${totalEngagements}`);
+    console.log(`📊 Total content generated: ${totalReplies} replies, ${totalQuotes} quotes`);
+    
+    // Ensure minimum post generation if enabled
+    if (this.mission.contentTypes?.posts && quotas.postsPerRun > 0) {
+      await this.generateMinimumPosts(quotas.postsPerRun);
+    }
   }
 
   private async executePostMission(): Promise<void> {
@@ -274,7 +300,7 @@ class PaperPlanePilot {
     
     for (const tweet of filtered) {
       try {
-        const relevanceCheck = await XAIService.checkTweetRelevanceEnhanced(
+        const relevanceCheck = await this.xaiService.checkTweetRelevanceEnhanced(
           tweet.text,
           this.mission.objective,
           this.mission.intentDescription,
@@ -382,117 +408,6 @@ class PaperPlanePilot {
     return Math.max(5, Math.min(95, Math.round(finalProbability))); // Keep between 5-95%
   }
 
-  private async processEngagements(tweets: Tweet[], maxEngagements: number): Promise<number> {
-    let engagementCount = 0;
-    let enabledActions = this.mission.actions?.filter((action: any) => action.enabled) || [];
-    
-    // Fallback: If no actions configured but contentTypes are selected, generate actions
-    if (enabledActions.length === 0 && this.mission.contentTypes) {
-      console.log(`📝 Generating actions from content types for mission: ${this.mission.objective}`);
-      const generatedActions = [];
-      
-      if (this.mission.contentTypes.replies) {
-        generatedActions.push({ type: 'reply', enabled: true, probability: 70 });
-      }
-      
-      if (this.mission.contentTypes.quoteTweets) {
-        generatedActions.push({ type: 'quote', enabled: true, probability: 60 });
-      }
-      
-      // Always include basic engagement actions
-      generatedActions.push(
-        { type: 'like', enabled: true, probability: 80 },
-        { type: 'retweet', enabled: true, probability: 50 }
-      );
-      
-      enabledActions = generatedActions;
-    }
-    
-    if (enabledActions.length === 0) {
-      console.log(`⚠️ No actions enabled for this mission and no content types selected`);
-      return 0;
-    }
-    
-    for (const tweet of tweets) {
-      if (engagementCount >= maxEngagements) break;
-      
-      // Analyze conversation thread for strategic intelligence
-      let threadContext = null;
-      try {
-        threadContext = await this.threadIntelligence.analyzeConversationThread(tweet.id);
-        console.log(`🧠 Thread analysis: ${threadContext.suggestedApproach} approach, ${threadContext.strategicValue}% value, ${threadContext.riskLevel} risk`);
-        
-        // Skip high-risk threads if risk tolerance is low
-        if (threadContext.riskLevel === 'high' && (!this.mission.riskTolerance || this.mission.riskTolerance === 'low')) {
-          console.log(`⚠️ Skipping high-risk thread: ${tweet.id}`);
-          continue;
-        }
-        
-        // Skip threads with avoid approach
-        if (threadContext.suggestedApproach === 'avoid') {
-          console.log(`🚫 Thread intelligence suggests avoiding: ${tweet.id}`);
-          continue;
-        }
-      } catch (error) {
-        console.log(`📊 Basic engagement analysis for tweet: ${tweet.id} (thread analysis failed)`);
-        // Continue with basic engagement if thread analysis fails
-      }
-      
-      // Process each enabled action based on dynamic probability
-      for (const action of enabledActions) {
-        const dynamicProbability = this.calculateDynamicProbability(action, tweet, engagementCount);
-        
-        // Apply thread intelligence modifiers
-        let finalProbability = dynamicProbability;
-        if (threadContext) {
-          // Boost probability for high strategic value threads
-          if (threadContext.strategicValue > 70) {
-            finalProbability *= 1.3;
-          } else if (threadContext.strategicValue < 30) {
-            finalProbability *= 0.7;
-          }
-          
-          // Adjust based on suggested approach
-          if (threadContext.suggestedApproach === 'supportive' && action.type === 'like') {
-            finalProbability *= 1.2;
-          } else if (threadContext.suggestedApproach === 'informative' && action.type === 'reply') {
-            finalProbability *= 1.4;
-          } else if (threadContext.suggestedApproach === 'questioning' && action.type === 'reply') {
-            finalProbability *= 1.3;
-          }
-        }
-        
-        finalProbability = Math.max(5, Math.min(95, Math.round(finalProbability)));
-        const shouldExecute = Math.random() * 100 < finalProbability;
-        
-        console.log(`🎯 ${action.type} probability: ${finalProbability}% (base: ${dynamicProbability}%) - ${shouldExecute ? 'executing' : 'skipping'}`);
-        
-        if (!shouldExecute) continue;
-        
-        try {
-          const success = await this.executeAction(action, tweet);
-          if (success) {
-            engagementCount++;
-            console.log(`   ✅ ${action.type} executed on tweet ${tweet.id}`);
-            
-            // Delay between actions to be respectful
-            await this.delay(2000);
-          }
-        } catch (error: any) {
-          console.error(`   ❌ ${action.type} failed: ${error.message}`);
-          if (error.message.includes('429')) {
-            console.log(`⏰ Rate limited on ${action.type}, stopping engagements`);
-            return engagementCount;
-          }
-        }
-        
-        // Limit one action per tweet to avoid spam
-        break;
-      }
-    }
-    
-    return engagementCount;
-  }
 
   private async executeAction(action: any, tweet: Tweet): Promise<boolean> {
     // Check if this content type is enabled in mission preferences
@@ -549,7 +464,8 @@ class PaperPlanePilot {
         originalTweet: tweet,
         missionObjective: this.mission.objective,
         replyPrompts: this.mission.replyPrompts || [],
-        personalityTraits: this.mission.personalityTraits
+        personalityTraits: this.mission.personalityTraits,
+        strategicKeywords: this.mission.strategicKeywords || []
       };
       
       const generatedReply = await this.replyService.generateReply(context);
@@ -616,7 +532,8 @@ class PaperPlanePilot {
         originalTweet: tweet,
         missionObjective: this.mission.objective,
         replyPrompts: this.mission.replyPrompts || [],
-        personalityTraits: this.mission.personalityTraits
+        personalityTraits: this.mission.personalityTraits,
+        strategicKeywords: this.mission.strategicKeywords || []
       };
       
       const generatedQuote = await this.replyService.generateQuoteTweet(context);
@@ -799,6 +716,194 @@ class PaperPlanePilot {
       case 'reply': window.repliesUsed++; break;
       case 'retweet': window.retweetsUsed++; break;
       case 'post': window.postsUsed++; break;
+    }
+  }
+
+  private async processEngagementsWithQuotas(
+    tweets: Tweet[], 
+    minReplies: number, 
+    minQuotes: number, 
+    maxEngagements: number
+  ): Promise<{ replies: number; quotes: number }> {
+    let replyCount = 0;
+    let quoteCount = 0;
+    let engagementCount = 0;
+    
+    let enabledActions = this.mission.actions?.filter((action: any) => action.enabled) || [];
+    
+    // Prioritize reply and quote actions to meet quotas
+    const replyActions = enabledActions.filter((a: any) => a.type === 'reply');
+    const quoteActions = enabledActions.filter((a: any) => a.type === 'quote');
+    const otherActions = enabledActions.filter((a: any) => a.type !== 'reply' && a.type !== 'quote');
+    
+    for (const tweet of tweets) {
+      if (engagementCount >= maxEngagements) break;
+      if (replyCount >= minReplies && quoteCount >= minQuotes) break;
+      
+      // Analyze thread intelligence first
+      let threadContext = null;
+      try {
+        threadContext = await this.threadIntelligence.analyzeConversationThread(tweet.id);
+        
+        if (threadContext.riskLevel === 'high' && (!this.mission.riskTolerance || this.mission.riskTolerance === 'low')) {
+          continue;
+        }
+        
+        if (threadContext.suggestedApproach === 'avoid') {
+          continue;
+        }
+      } catch (error) {
+        // Continue with basic engagement if thread analysis fails
+      }
+      
+      // Prioritize replies if below quota - FORCE fulfillment
+      if (replyCount < minReplies && replyActions.length > 0) {
+        const replyAction = replyActions[0];
+        const probability = this.calculateDynamicProbability(replyAction, tweet, engagementCount);
+        
+        // Force reply generation if below minimum quota
+        const shouldForceReply = replyCount < minReplies;
+        const shouldGenerateReply = shouldForceReply || (Math.random() * 100 < probability);
+        
+        if (shouldGenerateReply) {
+          const success = await this.executeAction(replyAction, tweet);
+          if (success) {
+            replyCount++;
+            engagementCount++;
+            console.log(`✅ Reply generated (${replyCount}/${minReplies} quota) - ${shouldForceReply ? 'FORCED' : 'ORGANIC'}`);
+            await this.delay(2000);
+          } else if (shouldForceReply) {
+            console.log(`⚠️ Failed to generate required reply (${replyCount}/${minReplies}) - retrying with next tweet`);
+          }
+        }
+      }
+      
+      // Prioritize quotes if below quota - FORCE fulfillment
+      if (quoteCount < minQuotes && quoteActions.length > 0) {
+        const quoteAction = quoteActions[0];
+        const probability = this.calculateDynamicProbability(quoteAction, tweet, engagementCount);
+        
+        // Force quote generation if below minimum quota
+        const shouldForceQuote = quoteCount < minQuotes;
+        const shouldGenerateQuote = shouldForceQuote || (Math.random() * 100 < probability);
+        
+        if (shouldGenerateQuote) {
+          const success = await this.executeAction(quoteAction, tweet);
+          if (success) {
+            quoteCount++;
+            engagementCount++;
+            console.log(`✅ Quote tweet generated (${quoteCount}/${minQuotes} quota) - ${shouldForceQuote ? 'FORCED' : 'ORGANIC'}`);
+            await this.delay(2000);
+          } else if (shouldForceQuote) {
+            console.log(`⚠️ Failed to generate required quote (${quoteCount}/${minQuotes}) - retrying with next tweet`);
+          }
+        }
+      }
+      
+      // Fill remaining capacity with other actions
+      if (engagementCount < maxEngagements && otherActions.length > 0) {
+        for (const action of otherActions) {
+          const probability = this.calculateDynamicProbability(action, tweet, engagementCount);
+          
+          if (Math.random() * 100 < probability) {
+            const success = await this.executeAction(action, tweet);
+            if (success) {
+              engagementCount++;
+              console.log(`✅ ${action.type} executed`);
+              await this.delay(2000);
+              break; // One action per tweet
+            }
+          }
+        }
+      }
+      
+      await this.delay(1000);
+    }
+    
+    // CRITICAL: Ensure minimum quotas are met - retry mechanism
+    if (replyCount < minReplies || quoteCount < minQuotes) {
+      console.log(`⚠️ Quotas not met: ${replyCount}/${minReplies} replies, ${quoteCount}/${minQuotes} quotes`);
+      console.log(`🔄 Attempting additional searches to fulfill quotas...`);
+      
+      // Try additional searches if we haven't met quotas
+      for (const query of this.mission.targetQueries) {
+        if (replyCount >= minReplies && quoteCount >= minQuotes) break;
+        
+        try {
+          const additionalTweets = await this.searchTweets(query);
+          // Process only what we need
+          for (const tweet of additionalTweets.slice(0, 10)) {
+            if (replyCount >= minReplies && quoteCount >= minQuotes) break;
+            
+            // Skip thread analysis for quota fulfillment - prioritize completion
+            if (replyCount < minReplies && replyActions.length > 0) {
+              const success = await this.executeAction(replyActions[0], tweet);
+              if (success) {
+                replyCount++;
+                console.log(`✅ Additional reply generated (${replyCount}/${minReplies})`);
+                await this.delay(2000);
+              }
+            }
+            
+            if (quoteCount < minQuotes && quoteActions.length > 0) {
+              const success = await this.executeAction(quoteActions[0], tweet);
+              if (success) {
+                quoteCount++;
+                console.log(`✅ Additional quote generated (${quoteCount}/${minQuotes})`);
+                await this.delay(2000);
+              }
+            }
+          }
+        } catch (error: any) {
+          console.log(`⚠️ Additional search failed for quota fulfillment: ${error.message}`);
+        }
+      }
+    }
+    
+    console.log(`📊 Final quota results: ${replyCount}/${minReplies} replies, ${quoteCount}/${minQuotes} quotes`);
+    
+    return { replies: replyCount, quotes: quoteCount };
+  }
+
+  private async generateMinimumPosts(minPosts: number): Promise<void> {
+    console.log(`📝 Generating ${minPosts} minimum posts for mission`);
+    
+    try {
+      
+      for (let i = 0; i < minPosts; i++) {
+        const prompt = `Create an engaging social media post about: ${this.mission.objective}. 
+        Focus on providing value and driving engagement through thought-provoking content.`;
+        
+        const request = {
+          prompt,
+          userId: this.mission.userId.toString(),
+          missionObjective: this.mission.objective,
+          targetQueries: this.mission.targetQueries,
+          strategicKeywords: this.mission.strategicKeywords || [],
+          maxTokens: 100,
+          temperature: 0.7
+        };
+        
+        const response = await this.xaiService.generateContent(request);
+        
+        if (response?.content) {
+          // Post the generated content
+          await this.twitterClient.v2.tweet(response.content);
+          console.log(`✅ Generated post ${i + 1}/${minPosts}: "${response.content.substring(0, 50)}..."`);
+          
+          // Record the action
+          this.recordRequest('post');
+          
+          // Delay between posts
+          if (i < minPosts - 1) {
+            await this.delay(5000);
+          }
+        } else {
+          console.log(`❌ Failed to generate post ${i + 1}/${minPosts}`);
+        }
+      }
+    } catch (error: any) {
+      console.error(`❌ Error generating minimum posts: ${error.message}`);
     }
   }
 

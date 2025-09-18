@@ -19,6 +19,7 @@ export interface ReplyContext {
   replyPrompts: string[];
   userPersonality?: string;
   personalityTraits?: PersonalityTraits;
+  strategicKeywords?: string[]; // Keywords for algorithmic relevancy
 }
 
 export class AIReplyService {
@@ -107,6 +108,13 @@ export class AIReplyService {
     basePrompt += `POWER WORDS TO CONSIDER:\n`;
     basePrompt += `"Proven," "Essential," "Breakthrough," "Transform," "Discover," "Critical," "Strategic," "Optimal"\n\n`;
     
+    // Add strategic keywords for algorithmic relevancy
+    if (context.strategicKeywords && context.strategicKeywords.length > 0) {
+      basePrompt += `STRATEGIC KEYWORDS (integrate naturally for algorithmic relevancy):\n`;
+      basePrompt += `${context.strategicKeywords.join(', ')}\n`;
+      basePrompt += `IMPORTANT: Weave these keywords organically into your reply. Use them contextually to enhance semantic relevance without compromising readability.\n\n`;
+    }
+    
     basePrompt += `GENERATE REPLY:`;
     
     // Enhance with personality if available
@@ -180,10 +188,14 @@ export class AIReplyService {
   async generateQuoteTweet(context: ReplyContext): Promise<string | null> {
     if (!this.openaiApiKey) {
       const fallbacks = [
-        "This is exactly what we need to see more of.",
-        "Great insights from the community.",
-        "Building on this important discussion...",
-        "Adding this to the conversation."
+        "What implications do you see for the broader industry?",
+        "How does this align with current market trends?",
+        "Which aspects of this approach show the most promise?",
+        "What challenges might emerge from this development?",
+        "How do you think this will impact adoption rates?",
+        "What would successful implementation look like?",
+        "Which stakeholders benefit most from this approach?",
+        "What metrics would best measure this success?"
       ];
       return fallbacks[Math.floor(Math.random() * fallbacks.length)];
     }
