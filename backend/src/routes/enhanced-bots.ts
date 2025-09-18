@@ -5,7 +5,24 @@ import GeneratedPost from '../models/GeneratedPost';
 import { TwitterApi } from 'twitter-api-v2';
 import { authenticate, requireActiveSubscription } from '../middleware/auth';
 import XAIService from '../services/XAIService';
-import AIReplyService, { Tweet, ReplyContext } from '../services/AIReplyService';
+import { AIReplyService, ReplyContext } from '../services/AIReplyService';
+import PersonalityService from '../services/PersonalityService';
+import { ThreadIntelligenceService } from '../services/ThreadIntelligenceService';
+
+// Define Tweet interface
+interface Tweet {
+  id: string;
+  text: string;
+  author_id: string;
+  created_at: string;
+  public_metrics: {
+    retweet_count: number;
+    like_count: number;
+    reply_count: number;
+    quote_count: number;
+  };
+  context_annotations?: any[];
+}
 
 const router = express.Router();
 
@@ -76,9 +93,14 @@ class PaperPlanePilot {
   private twitterClient: TwitterApi;
   private mission: any;
   
+  private replyService: AIReplyService;
+  private threadIntelligence: ThreadIntelligenceService;
+
   constructor(twitterClient: TwitterApi, mission: any) {
     this.twitterClient = twitterClient;
     this.mission = mission;
+    this.replyService = new AIReplyService();
+    this.threadIntelligence = new ThreadIntelligenceService(twitterClient);
   }
 
   async executeMission(): Promise<void> {
@@ -221,6 +243,7 @@ class PaperPlanePilot {
       id: tweet.id,
       text: tweet.text || '',
       author_id: tweet.author_id || '',
+      created_at: tweet.created_at || new Date().toISOString(),
       public_metrics: tweet.public_metrics || {
         like_count: 0,
         retweet_count: 0,
@@ -245,23 +268,24 @@ class PaperPlanePilot {
       });
     }
 
-    // AI-powered relevance check
-    console.log(`🔍 Running relevance prescan on ${filtered.length} tweets...`);
+    // AI-powered enhanced relevance check
+    console.log(`🔍 Running enhanced relevance prescan on ${filtered.length} tweets...`);
     const relevantTweets: Tweet[] = [];
     
     for (const tweet of filtered) {
       try {
-        const relevanceCheck = await XAIService.checkTweetRelevance(
+        const relevanceCheck = await XAIService.checkTweetRelevanceEnhanced(
           tweet.text,
           this.mission.objective,
-          this.mission.intentDescription
+          this.mission.intentDescription,
+          tweet.public_metrics
         );
         
-        if (relevanceCheck.isRelevant && relevanceCheck.score >= 60) {
+        if (relevanceCheck.isRelevant && relevanceCheck.totalScore >= 60) {
           relevantTweets.push(tweet);
-          console.log(`   ✅ Relevant (${relevanceCheck.score}%): ${tweet.text.substring(0, 80)}...`);
+          console.log(`   ✅ Relevant (${relevanceCheck.totalScore}/100): Topic:${relevanceCheck.breakdown.topicRelevance} Engagement:${relevanceCheck.breakdown.engagementPotential} Community:${relevanceCheck.breakdown.communityFit} Timing:${relevanceCheck.breakdown.timingOptimization} - ${tweet.text.substring(0, 80)}...`);
         } else {
-          console.log(`   ❌ Not relevant (${relevanceCheck.score}%): ${relevanceCheck.reason} - ${tweet.text.substring(0, 80)}...`);
+          console.log(`   ❌ Not relevant (${relevanceCheck.totalScore}/100): ${relevanceCheck.reason} - ${tweet.text.substring(0, 80)}...`);
         }
         
         // Add small delay to avoid rate limiting
@@ -286,6 +310,76 @@ class PaperPlanePilot {
 
     console.log(`   ✅ Filtered to ${relevantTweets.length} relevant tweets (from ${tweets.length} total)`);
     return relevantTweets;
+  }
+
+  /**
+   * Calculate dynamic action probability based on context and human-like variance
+   */
+  private calculateDynamicProbability(baseAction: any, tweet: Tweet, engagementCount: number): number {
+    let probability = baseAction.probability || 50;
+    
+    // Content quality multiplier (based on engagement metrics)
+    const totalEngagement = (tweet.public_metrics?.like_count || 0) + 
+                           (tweet.public_metrics?.retweet_count || 0) + 
+                           (tweet.public_metrics?.reply_count || 0);
+    
+    const qualityMultiplier = Math.min(1.5, 1 + (totalEngagement / 1000)); // Up to 50% boost for high-engagement content
+    
+    // Fatigue factor - reduce probability as we engage more
+    const fatigueMultiplier = Math.max(0.6, 1 - (engagementCount * 0.05)); // Gradual reduction
+    
+    // Time-based variance (simulate human energy levels)
+    const hour = new Date().getHours();
+    const timeMultiplier = (hour >= 9 && hour <= 17) ? 1.1 : 0.9; // More active during business hours
+    
+    // Human-like randomness (±15% variance)
+    const randomVariance = 0.85 + (Math.random() * 0.3);
+    
+    // Action-specific adjustments
+    let actionMultiplier = 1;
+    switch (baseAction.type) {
+      case 'like':
+        actionMultiplier = 1.2; // Likes are most common
+        break;
+      case 'reply':
+        actionMultiplier = totalEngagement > 10 ? 1.3 : 0.8; // Reply more to engaging content
+        break;
+      case 'retweet':
+        actionMultiplier = totalEngagement > 50 ? 1.4 : 0.6; // Retweet high-engagement content
+        break;
+      case 'quote':
+        actionMultiplier = totalEngagement > 20 ? 1.2 : 0.7; // Quote interesting content
+        break;
+    }
+    
+    // Apply personality modifiers if available
+    let personalityMultiplier = 1;
+    if (this.mission.personalityTraits) {
+      const personalityModifiers = PersonalityService.applyPersonalityToEngagement(
+        { like: 100, reply: 100, retweet: 100, quote: 100 },
+        this.mission.personalityTraits
+      );
+      
+      switch (baseAction.type) {
+        case 'like':
+          personalityMultiplier = personalityModifiers.like / 100;
+          break;
+        case 'reply':
+          personalityMultiplier = personalityModifiers.reply / 100;
+          break;
+        case 'retweet':
+          personalityMultiplier = personalityModifiers.retweet / 100;
+          break;
+        case 'quote':
+          personalityMultiplier = personalityModifiers.quote / 100;
+          break;
+      }
+    }
+    
+    const finalProbability = probability * qualityMultiplier * fatigueMultiplier * 
+                           timeMultiplier * randomVariance * actionMultiplier * personalityMultiplier;
+    
+    return Math.max(5, Math.min(95, Math.round(finalProbability))); // Keep between 5-95%
   }
 
   private async processEngagements(tweets: Tweet[], maxEngagements: number): Promise<number> {
@@ -322,9 +416,56 @@ class PaperPlanePilot {
     for (const tweet of tweets) {
       if (engagementCount >= maxEngagements) break;
       
-      // Process each enabled action based on probability
+      // Analyze conversation thread for strategic intelligence
+      let threadContext = null;
+      try {
+        threadContext = await this.threadIntelligence.analyzeConversationThread(tweet.id);
+        console.log(`🧠 Thread analysis: ${threadContext.suggestedApproach} approach, ${threadContext.strategicValue}% value, ${threadContext.riskLevel} risk`);
+        
+        // Skip high-risk threads if risk tolerance is low
+        if (threadContext.riskLevel === 'high' && (!this.mission.riskTolerance || this.mission.riskTolerance === 'low')) {
+          console.log(`⚠️ Skipping high-risk thread: ${tweet.id}`);
+          continue;
+        }
+        
+        // Skip threads with avoid approach
+        if (threadContext.suggestedApproach === 'avoid') {
+          console.log(`🚫 Thread intelligence suggests avoiding: ${tweet.id}`);
+          continue;
+        }
+      } catch (error) {
+        console.log(`📊 Basic engagement analysis for tweet: ${tweet.id} (thread analysis failed)`);
+        // Continue with basic engagement if thread analysis fails
+      }
+      
+      // Process each enabled action based on dynamic probability
       for (const action of enabledActions) {
-        const shouldExecute = Math.random() * 100 < action.probability;
+        const dynamicProbability = this.calculateDynamicProbability(action, tweet, engagementCount);
+        
+        // Apply thread intelligence modifiers
+        let finalProbability = dynamicProbability;
+        if (threadContext) {
+          // Boost probability for high strategic value threads
+          if (threadContext.strategicValue > 70) {
+            finalProbability *= 1.3;
+          } else if (threadContext.strategicValue < 30) {
+            finalProbability *= 0.7;
+          }
+          
+          // Adjust based on suggested approach
+          if (threadContext.suggestedApproach === 'supportive' && action.type === 'like') {
+            finalProbability *= 1.2;
+          } else if (threadContext.suggestedApproach === 'informative' && action.type === 'reply') {
+            finalProbability *= 1.4;
+          } else if (threadContext.suggestedApproach === 'questioning' && action.type === 'reply') {
+            finalProbability *= 1.3;
+          }
+        }
+        
+        finalProbability = Math.max(5, Math.min(95, Math.round(finalProbability)));
+        const shouldExecute = Math.random() * 100 < finalProbability;
+        
+        console.log(`🎯 ${action.type} probability: ${finalProbability}% (base: ${dynamicProbability}%) - ${shouldExecute ? 'executing' : 'skipping'}`);
         
         if (!shouldExecute) continue;
         
@@ -403,14 +544,15 @@ class PaperPlanePilot {
     let replyText = customContent;
     
     if (!replyText) {
-      // Generate AI reply
+      // Generate AI reply with personality
       const context: ReplyContext = {
         originalTweet: tweet,
         missionObjective: this.mission.objective,
-        replyPrompts: this.mission.replyPrompts || []
+        replyPrompts: this.mission.replyPrompts || [],
+        personalityTraits: this.mission.personalityTraits
       };
       
-      const generatedReply = await AIReplyService.generateReply(context);
+      const generatedReply = await this.replyService.generateReply(context);
       replyText = generatedReply || undefined;
     }
     
@@ -473,10 +615,11 @@ class PaperPlanePilot {
       const context: ReplyContext = {
         originalTweet: tweet,
         missionObjective: this.mission.objective,
-        replyPrompts: this.mission.replyPrompts || []
+        replyPrompts: this.mission.replyPrompts || [],
+        personalityTraits: this.mission.personalityTraits
       };
       
-      const generatedQuote = await AIReplyService.generateQuoteTweet(context);
+      const generatedQuote = await this.replyService.generateQuoteTweet(context);
       quoteText = generatedQuote || undefined;
     }
     

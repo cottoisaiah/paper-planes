@@ -46,6 +46,15 @@ export interface IMission extends Document {
   avoidKeywords: string[]; // Words/phrases to avoid in targeted content
   replyPrompts: string[]; // AI prompts for generating replies
   
+  // Personality Engine
+  personalityTraits?: {
+    tone: 'professional' | 'casual' | 'friendly' | 'authoritative' | 'humorous';
+    expertise: 'beginner' | 'intermediate' | 'expert' | 'thought-leader';
+    engagement: 'conservative' | 'moderate' | 'active' | 'aggressive';
+    formality: 'formal' | 'semi-formal' | 'casual' | 'very-casual';
+    perspective: 'helpful' | 'analytical' | 'creative' | 'critical' | 'supportive';
+  };
+  
   // Analytics & Learning
   lastRun: Date;
   successMetrics: {
@@ -105,6 +114,15 @@ const missionSchema = new Schema<IMission>({
   targetUserTypes: [{ type: String }],
   avoidKeywords: [{ type: String }],
   replyPrompts: [{ type: String }],
+  
+  // Personality Engine
+  personalityTraits: {
+    tone: { type: String, enum: ['professional', 'casual', 'friendly', 'authoritative', 'humorous'], default: 'professional' },
+    expertise: { type: String, enum: ['beginner', 'intermediate', 'expert', 'thought-leader'], default: 'intermediate' },
+    engagement: { type: String, enum: ['conservative', 'moderate', 'active', 'aggressive'], default: 'moderate' },
+    formality: { type: String, enum: ['formal', 'semi-formal', 'casual', 'very-casual'], default: 'semi-formal' },
+    perspective: { type: String, enum: ['helpful', 'analytical', 'creative', 'critical', 'supportive'], default: 'helpful' }
+  },
   
   // Analytics
   lastRun: { type: Date },
