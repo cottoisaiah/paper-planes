@@ -19,6 +19,7 @@ import stripeRoutes from './routes/stripe';
 import twitterAuthRoutes from './routes/twitterAuth';
 import analyticsRoutes from './routes/analytics';
 import socialRoutes from './routes/social';
+import LogStreamService from './services/LogStreamService';
 
 const app = express();
 const PORT = process.env.PORT || 5000;
@@ -41,7 +42,18 @@ if (process.env.NODE_ENV !== 'production') {
 
 // Middleware
 app.set('trust proxy', 1); // Trust only the first proxy (nginx)
-app.use(helmet());
+app.use(helmet({
+  contentSecurityPolicy: {
+    directives: {
+      defaultSrc: ["'self'", "http:", "https:", "data:", "blob:", "'unsafe-inline'", "*.stripe.com", "*.twitter.com"],
+      connectSrc: ["'self'", "ws:", "wss:", "http:", "https:", "*.stripe.com", "*.twitter.com", "ws://localhost:3002", "wss://localhost:3002", "*.redexct.xyz:3002"],
+      scriptSrc: ["'self'", "'unsafe-inline'", "'unsafe-eval'", "*.stripe.com"],
+      styleSrc: ["'self'", "'unsafe-inline'", "fonts.googleapis.com"],
+      fontSrc: ["'self'", "fonts.gstatic.com"],
+      imgSrc: ["'self'", "data:", "https:", "*.twitter.com", "*.stripe.com"]
+    }
+  }
+}));
 app.use(cors());
 app.use('/api/stripe/webhook', express.raw({ type: 'application/json' }));
 app.use(express.json());
@@ -72,6 +84,11 @@ mongoose.connect(process.env.MONGODB_URI as string)
 // Start server
 app.listen(PORT, () => {
   logger.info(`Server running on port ${PORT}`);
+  
+  // Initialize WebSocket server for log streaming
+  const logStream = LogStreamService.getInstance();
+  logStream.initializeWebSocketServer(3002);
+  logStream.logSystem('success', `Paper Planes backend started on port ${PORT}`);
 });
 
 export default app;

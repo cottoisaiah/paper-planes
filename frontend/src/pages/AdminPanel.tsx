@@ -27,6 +27,7 @@ import { useSelector } from 'react-redux';
 import { RootState } from '../store/store';
 import axios from 'axios';
 import { toast } from 'react-toastify';
+import LogViewer from '../components/LogViewer';
 
 interface User {
   _id: string;
@@ -56,6 +57,7 @@ const AdminPanel = () => {
   const [stats, setStats] = useState<Stats>({ userCount: 0, missionCount: 0, postCount: 0 });
   const [selectedUser, setSelectedUser] = useState<User | null>(null);
   const [editDialog, setEditDialog] = useState(false);
+  const [showLogs, setShowLogs] = useState(false);
 
   useEffect(() => {
     if (user?.isAdmin) {
@@ -127,9 +129,26 @@ const AdminPanel = () => {
 
   return (
     <Container maxWidth="lg" sx={{ mt: 4 }}>
-      <Typography variant="h4" component="h1" gutterBottom sx={{ color: '#ffffff' }}>
-        Admin Dashboard
-      </Typography>
+      <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 3 }}>
+        <Typography variant="h4" component="h1" sx={{ color: '#ffffff' }}>
+          Admin Dashboard
+        </Typography>
+        
+        <Button 
+          variant="contained" 
+          onClick={() => setShowLogs(!showLogs)}
+          sx={{ backgroundColor: '#1DA1F2' }}
+        >
+          {showLogs ? 'Hide Logs' : 'Show Live Logs'}
+        </Button>
+      </Box>
+
+      {/* Log Viewer Modal */}
+      {showLogs && (
+        <Box sx={{ mb: 4 }}>
+          <LogViewer onClose={() => setShowLogs(false)} />
+        </Box>
+      )}
 
       {/* Stats Grid */}
       <Grid container spacing={3} sx={{ mt: 2, mb: 4 }}>

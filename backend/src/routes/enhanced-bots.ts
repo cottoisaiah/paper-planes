@@ -8,6 +8,7 @@ import { XAIService } from '../services/XAIService';
 import { AIReplyService, ReplyContext } from '../services/AIReplyService';
 import PersonalityService from '../services/PersonalityService';
 import { ThreadIntelligenceService } from '../services/ThreadIntelligenceService';
+import LogStreamService from '../services/LogStreamService';
 
 // Define Tweet interface
 interface Tweet {
@@ -96,6 +97,7 @@ class PaperPlanePilot {
   private replyService: AIReplyService;
   private threadIntelligence: ThreadIntelligenceService;
   private xaiService: XAIService;
+  private logger: LogStreamService;
 
   constructor(twitterClient: TwitterApi, mission: any) {
     this.twitterClient = twitterClient;
@@ -103,11 +105,18 @@ class PaperPlanePilot {
     this.replyService = new AIReplyService();
     this.threadIntelligence = new ThreadIntelligenceService(twitterClient);
     this.xaiService = new XAIService();
+    this.logger = LogStreamService.getInstance();
   }
 
   async executeMission(): Promise<void> {
     console.log(`🛩️  Paper Plane "${this.mission.objective}" taking off!`);
     console.log(`📋 Mission Type: ${this.mission.missionType}`);
+    
+    this.logger.logMission('info', `Mission "${this.mission.objective}" starting execution`, this.mission._id.toString(), {
+      missionType: this.mission.missionType,
+      contentQuotas: this.mission.contentQuotas,
+      strategicKeywords: this.mission.strategicKeywords
+    });
     
     try {
       // Execute based on mission type
@@ -129,9 +138,11 @@ class PaperPlanePilot {
       // Update mission analytics
       await this.updateMissionMetrics();
       console.log(`✅ Paper Plane mission completed successfully!`);
+      this.logger.logMission('success', `Mission "${this.mission.objective}" completed successfully`, this.mission._id.toString());
       
     } catch (error: any) {
       console.error(`❌ Mission failed: ${error.message}`);
+      this.logger.logMission('error', `Mission "${this.mission.objective}" failed: ${error.message}`, this.mission._id.toString(), { error: error.stack });
     }
   }
 
@@ -770,10 +781,25 @@ class PaperPlanePilot {
           if (success) {
             replyCount++;
             engagementCount++;
-            console.log(`✅ Reply generated (${replyCount}/${minReplies} quota) - ${shouldForceReply ? 'FORCED' : 'ORGANIC'}`);
+            const logMessage = `Reply generated (${replyCount}/${minReplies} quota) - ${shouldForceReply ? 'FORCED' : 'ORGANIC'}`;
+            console.log(`✅ ${logMessage}`);
+            this.logger.logQuota('success', logMessage, this.mission._id.toString(), {
+              type: 'reply',
+              current: replyCount,
+              target: minReplies,
+              forced: shouldForceReply,
+              tweetId: tweet.id
+            });
             await this.delay(2000);
           } else if (shouldForceReply) {
-            console.log(`⚠️ Failed to generate required reply (${replyCount}/${minReplies}) - retrying with next tweet`);
+            const logMessage = `Failed to generate required reply (${replyCount}/${minReplies}) - retrying with next tweet`;
+            console.log(`⚠️ ${logMessage}`);
+            this.logger.logQuota('warning', logMessage, this.mission._id.toString(), {
+              type: 'reply',
+              current: replyCount,
+              target: minReplies,
+              tweetId: tweet.id
+            });
           }
         }
       }
@@ -792,10 +818,25 @@ class PaperPlanePilot {
           if (success) {
             quoteCount++;
             engagementCount++;
-            console.log(`✅ Quote tweet generated (${quoteCount}/${minQuotes} quota) - ${shouldForceQuote ? 'FORCED' : 'ORGANIC'}`);
+            const logMessage = `Quote tweet generated (${quoteCount}/${minQuotes} quota) - ${shouldForceQuote ? 'FORCED' : 'ORGANIC'}`;
+            console.log(`✅ ${logMessage}`);
+            this.logger.logQuota('success', logMessage, this.mission._id.toString(), {
+              type: 'quote',
+              current: quoteCount,
+              target: minQuotes,
+              forced: shouldForceQuote,
+              tweetId: tweet.id
+            });
             await this.delay(2000);
           } else if (shouldForceQuote) {
-            console.log(`⚠️ Failed to generate required quote (${quoteCount}/${minQuotes}) - retrying with next tweet`);
+            const logMessage = `Failed to generate required quote (${quoteCount}/${minQuotes}) - retrying with next tweet`;
+            console.log(`⚠️ ${logMessage}`);
+            this.logger.logQuota('warning', logMessage, this.mission._id.toString(), {
+              type: 'quote',
+              current: quoteCount,
+              target: minQuotes,
+              tweetId: tweet.id
+            });
           }
         }
       }
@@ -861,6 +902,13 @@ class PaperPlanePilot {
     }
     
     console.log(`📊 Final quota results: ${replyCount}/${minReplies} replies, ${quoteCount}/${minQuotes} quotes`);
+    
+    this.logger.logQuota('info', `Final quota results: ${replyCount}/${minReplies} replies, ${quoteCount}/${minQuotes} quotes`, this.mission._id.toString(), {
+      finalResults: {
+        replies: { achieved: replyCount, target: minReplies, success: replyCount >= minReplies },
+        quotes: { achieved: quoteCount, target: minQuotes, success: quoteCount >= minQuotes }
+      }
+    });
     
     return { replies: replyCount, quotes: quoteCount };
   }
