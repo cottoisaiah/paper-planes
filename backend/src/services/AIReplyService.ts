@@ -90,13 +90,13 @@ export class AIReplyService {
     }
     
     basePrompt += `CREATE A HIGH-ENGAGEMENT REPLY THAT:\n`;
-    basePrompt += `✓ Drives meaningful responses through thoughtful questions\n`;
-    basePrompt += `✓ Provides unique insights or perspectives\n`;
-    basePrompt += `✓ Uses sophisticated vocabulary to demonstrate expertise\n`;
-    basePrompt += `✓ Challenges assumptions or builds on key points\n`;
-    basePrompt += `✓ Creates intellectual curiosity gaps\n`;
-    basePrompt += `✓ Positions for continued conversation\n`;
-    basePrompt += `✓ Maintains professional authority\n\n`;
+    basePrompt += `- Drives meaningful responses through thoughtful questions\n`;
+    basePrompt += `- Provides unique insights or perspectives\n`;
+    basePrompt += `- Uses sophisticated vocabulary to demonstrate expertise\n`;
+    basePrompt += `- Challenges assumptions or builds on key points\n`;
+    basePrompt += `- Creates intellectual curiosity gaps\n`;
+    basePrompt += `- Positions for continued conversation\n`;
+    basePrompt += `- Maintains professional authority\n\n`;
     
     basePrompt += `ENGAGEMENT TECHNIQUES:\n`;
     basePrompt += `- Ask follow-up questions that require thoughtful answers\n`;

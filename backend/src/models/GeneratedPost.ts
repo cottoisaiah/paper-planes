@@ -7,6 +7,8 @@ export interface IGeneratedPost extends Document {
   timestamp: Date;
   status: 'draft' | 'sent' | 'failed';
   xPostId?: string;
+  originalTweetId?: string; // Track which tweet we replied to
+  interactionType?: 'reply' | 'quote' | 'retweet' | 'like' | 'post'; // Track interaction type
   createdAt: Date;
   updatedAt: Date;
 }
@@ -18,6 +20,8 @@ const generatedPostSchema = new Schema<IGeneratedPost>({
   timestamp: { type: Date, default: Date.now },
   status: { type: String, enum: ['draft', 'sent', 'failed'], default: 'draft' },
   xPostId: { type: String },
+  originalTweetId: { type: String }, // Track which tweet we replied to
+  interactionType: { type: String, enum: ['reply', 'quote', 'retweet', 'like', 'post'] }, // Track interaction type
 }, { timestamps: true });
 
 export default mongoose.model<IGeneratedPost>('GeneratedPost', generatedPostSchema);

@@ -576,6 +576,18 @@ Return only the queries, one per line, without quotes or numbering.`;
   private async replyToTweet(tweet: Tweet, customContent?: string): Promise<boolean> {
     if (!this.canMakeRequest('reply')) return false;
     
+    // Check if we've already replied to this tweet
+    const existingReply = await GeneratedPost.findOne({
+      originalTweetId: tweet.id,
+      interactionType: 'reply',
+      status: 'sent'
+    });
+    
+    if (existingReply) {
+      console.log(`⚠️ Already replied to tweet ${tweet.id}, skipping duplicate`);
+      return false;
+    }
+    
     let replyText = customContent;
     
     if (!replyText) {
@@ -609,6 +621,8 @@ Return only the queries, one per line, without quotes or numbering.`;
           content: `@${tweet.author_id} ${replyText}`, // Include the @ mention for context
           status: 'sent',
           xPostId: replyResponse.data?.id,
+          originalTweetId: tweet.id, // Track which tweet we replied to
+          interactionType: 'reply', // Track that this is a reply
           timestamp: new Date()
         });
         
@@ -629,6 +643,8 @@ Return only the queries, one per line, without quotes or numbering.`;
           missionId: this.mission._id,
           content: `@${tweet.author_id} ${replyText}`,
           status: 'failed',
+          originalTweetId: tweet.id, // Track which tweet we tried to reply to
+          interactionType: 'reply', // Track that this is a reply
           timestamp: new Date()
         });
         
@@ -644,6 +660,18 @@ Return only the queries, one per line, without quotes or numbering.`;
 
   private async quoteTweet(tweet: Tweet, customContent?: string): Promise<boolean> {
     if (!this.canMakeRequest('post')) return false;
+    
+    // Check if we've already quote tweeted this tweet
+    const existingQuote = await GeneratedPost.findOne({
+      originalTweetId: tweet.id,
+      interactionType: 'quote',
+      status: 'sent'
+    });
+    
+    if (existingQuote) {
+      console.log(`⚠️ Already quote tweeted ${tweet.id}, skipping duplicate`);
+      return false;
+    }
     
     let quoteText = customContent;
     
@@ -674,6 +702,8 @@ Return only the queries, one per line, without quotes or numbering.`;
           content: quoteText,
           status: 'sent',
           xPostId: quoteResponse.data?.id,
+          originalTweetId: tweet.id, // Track which tweet we quoted
+          interactionType: 'quote', // Track that this is a quote tweet
           timestamp: new Date()
         });
         
@@ -694,6 +724,8 @@ Return only the queries, one per line, without quotes or numbering.`;
           missionId: this.mission._id,
           content: quoteText,
           status: 'failed',
+          originalTweetId: tweet.id, // Track which tweet we tried to quote
+          interactionType: 'quote', // Track that this is a quote tweet
           timestamp: new Date()
         });
         

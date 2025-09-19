@@ -103,7 +103,7 @@ router.post('/twitter/callback', async (req, res) => {
       console.log('Background metrics update failed:', err.message);
     });
     
-    const jwtToken = jwt.sign({ id: user._id }, process.env.JWT_SECRET as string, { expiresIn: '24h' });
+    const jwtToken = jwt.sign({ id: user._id }, process.env.JWT_SECRET as string, { expiresIn: '7d' });
     res.json({ 
       token: jwtToken, 
       user: { 
