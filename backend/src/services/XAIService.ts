@@ -24,7 +24,7 @@ export interface GrokGenerationResponse {
 
 export class XAIService {
   private readonly baseURL = 'https://api.x.ai/v1';
-  private readonly model = 'grok-beta';
+  private readonly model = 'grok-3';
 
   /**
    * Generate content using Grok-4 with optional context

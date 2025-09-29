@@ -591,7 +591,7 @@ Return only the queries, one per line, without quotes or numbering.`;
     let replyText = customContent;
     
     if (!replyText) {
-      // Generate AI reply with personality
+      // Generate AI reply with personality (no emojis/hashtags)
       const context: ReplyContext = {
         originalTweet: tweet,
         missionObjective: this.mission.objective,
@@ -1061,7 +1061,8 @@ Return only the queries, one per line, without quotes or numbering.`;
       
       for (let i = 0; i < minPosts; i++) {
         const prompt = `Create an engaging social media post about: ${this.mission.objective}. 
-        Focus on providing value and driving engagement through thought-provoking content.`;
+        Focus on providing value and driving engagement through thought-provoking content.
+        CRITICAL: NO emojis, NO hashtags, professional tone only. Use plain text.`;
         
         const request = {
           prompt,
@@ -1069,16 +1070,39 @@ Return only the queries, one per line, without quotes or numbering.`;
           missionObjective: this.mission.objective,
           targetQueries: this.mission.targetQueries,
           strategicKeywords: this.mission.strategicKeywords || [],
-          maxTokens: 100,
+          maxTokens: 150,
           temperature: 0.7
         };
         
-        const response = await this.xaiService.generateContent(request);
+        let attempts = 0;
+        let uniqueContent = null;
         
-        if (response?.content) {
+        // Try up to 3 times to generate unique content
+        while (attempts < 3 && !uniqueContent) {
+          const response = await this.xaiService.generateContent({
+            ...request,
+            prompt: attempts > 0 ? `${prompt} Generate a different variation with fresh perspective.` : prompt
+          });
+          
+          if (response?.content) {
+            // Check if this content has been posted before
+            const isDuplicate = await this.checkContentDuplicate(response.content);
+            if (!isDuplicate) {
+              uniqueContent = response.content;
+            } else {
+              console.log(`⚠️ Duplicate content detected, generating new variation (attempt ${attempts + 1})`);
+            }
+          }
+          attempts++;
+        }
+        
+        if (uniqueContent) {
           // Post the generated content
-          await this.twitterClient.v2.tweet(response.content);
-          console.log(`✅ Generated post ${i + 1}/${minPosts}: "${response.content.substring(0, 50)}..."`);
+          const tweetResponse = await this.twitterClient.v2.tweet(uniqueContent);
+          console.log(`✅ Generated post ${i + 1}/${minPosts}: "${uniqueContent.substring(0, 50)}..."`);
+          
+          // Save to database for duplicate tracking
+          await this.saveGeneratedPost(uniqueContent, 'post', tweetResponse.data?.id);
           
           // Record the action
           this.recordRequest('post');
@@ -1088,7 +1112,7 @@ Return only the queries, one per line, without quotes or numbering.`;
             await this.delay(5000);
           }
         } else {
-          console.log(`❌ Failed to generate post ${i + 1}/${minPosts}`);
+          console.log(`❌ Failed to generate unique post ${i + 1}/${minPosts} after ${attempts} attempts`);
         }
       }
     } catch (error: any) {
@@ -1104,6 +1128,79 @@ Return only the queries, one per line, without quotes or numbering.`;
 
   private async delay(ms: number): Promise<void> {
     return new Promise(resolve => setTimeout(resolve, ms));
+  }
+
+  /**
+   * Check if content has been posted before to prevent duplicates
+   */
+  private async checkContentDuplicate(content: string): Promise<boolean> {
+    try {
+      // Check exact matches first
+      const exactMatch = await GeneratedPost.findOne({
+        userId: this.mission.userId,
+        content: content,
+        status: 'sent'
+      });
+      
+      if (exactMatch) {
+        return true;
+      }
+      
+      // Check for similar content (80% similarity)
+      const recentPosts = await GeneratedPost.find({
+        userId: this.mission.userId,
+        status: 'sent',
+        createdAt: { $gte: new Date(Date.now() - 30 * 24 * 60 * 60 * 1000) } // Last 30 days
+      }).select('content');
+      
+      for (const post of recentPosts) {
+        const similarity = this.calculateTextSimilarity(content, post.content);
+        if (similarity > 0.8) {
+          console.log(`Content similarity detected: ${(similarity * 100).toFixed(1)}% with previous post`);
+          return true;
+        }
+      }
+      
+      return false;
+    } catch (error: any) {
+      console.error(`Error checking content duplicate: ${error.message}`);
+      return false; // Allow posting if check fails
+    }
+  }
+
+  /**
+   * Calculate text similarity between two strings
+   */
+  private calculateTextSimilarity(text1: string, text2: string): number {
+    const words1 = new Set(text1.toLowerCase().split(/\s+/));
+    const words2 = new Set(text2.toLowerCase().split(/\s+/));
+    
+    const intersection = new Set([...words1].filter(x => words2.has(x)));
+    const union = new Set([...words1, ...words2]);
+    
+    return intersection.size / union.size;
+  }
+
+  /**
+   * Save generated post to database for tracking
+   */
+  private async saveGeneratedPost(content: string, type: string, xPostId?: string): Promise<void> {
+    try {
+      const generatedPost = new GeneratedPost({
+        userId: this.mission.userId,
+        missionId: this.mission._id,
+        content: content,
+        status: 'sent',
+        xPostId: xPostId,
+        interactionType: type,
+        timestamp: new Date()
+      });
+      
+      await generatedPost.save();
+      console.log(`💾 Saved generated ${type} to database for duplicate tracking`);
+    } catch (error: any) {
+      console.error(`❌ Failed to save generated post: ${error.message}`);
+    }
   }
 }
 
