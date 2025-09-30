@@ -70,7 +70,7 @@ app.use(rateLimit({
 }));
 
 // Routes
-app.use('/api', authRoutes);
+app.use('/api/auth', authRoutes);
 app.use('/api/missions', missionRoutes);
 app.use('/api/bots', botRoutes);
 app.use('/api/context', contextRoutes);
