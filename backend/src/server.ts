@@ -23,6 +23,7 @@ import stripeRoutes from './routes/stripe';
 import twitterAuthRoutes from './routes/twitterAuth';
 import analyticsRoutes from './routes/analytics';
 import socialRoutes from './routes/social';
+import aiProvidersRoutes from './routes/ai-providers';
 import LogStreamService from './services/LogStreamService';
 
 const app = express();
@@ -69,16 +70,17 @@ app.use(rateLimit({
 }));
 
 // Routes
-app.use('/api/auth', authRoutes);
+app.use('/api', authRoutes);
 app.use('/api/missions', missionRoutes);
 app.use('/api/bots', botRoutes);
 app.use('/api/context', contextRoutes);
 app.use('/api/posts', postRoutes);
 app.use('/api/admin', adminRoutes);
 app.use('/api/stripe', stripeRoutes);
-app.use('/api/twitter-auth', twitterAuthRoutes); // For twitter auth
-app.use('/api/analytics', analyticsRoutes); // Analytics and AI content generation
-app.use('/api/social', socialRoutes); // Social data with platform credentials
+app.use('/api/twitter-auth', twitterAuthRoutes);
+app.use('/api/analytics', analyticsRoutes);
+app.use('/api/social', socialRoutes);
+app.use('/api/ai-providers', aiProvidersRoutes);
 
 // Connect to MongoDB
 mongoose.connect(process.env.MONGODB_URI as string)

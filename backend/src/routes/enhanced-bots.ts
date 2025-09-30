@@ -4,7 +4,8 @@ import Mission from '../models/Mission';
 import GeneratedPost from '../models/GeneratedPost';
 import { TwitterApi } from 'twitter-api-v2';
 import { authenticate, requireActiveSubscription } from '../middleware/auth';
-import { XAIService } from '../services/XAIService';
+import AIProviderService from '../services/AIProviderService';
+import UserApiKeys from '../models/UserApiKeys';
 import { AIReplyService, ReplyContext } from '../services/AIReplyService';
 import PersonalityService from '../services/PersonalityService';
 import { ThreadIntelligenceService } from '../services/ThreadIntelligenceService';
@@ -96,16 +97,19 @@ class PaperPlanePilot {
   
   private replyService: AIReplyService;
   private threadIntelligence: ThreadIntelligenceService;
-  private xaiService: XAIService;
+  private aiService = AIProviderService;
   private logger: LogStreamService;
+  private userApiKeys: any = null;
 
   constructor(twitterClient: TwitterApi, mission: any) {
     this.twitterClient = twitterClient;
     this.mission = mission;
     this.replyService = new AIReplyService();
     this.threadIntelligence = new ThreadIntelligenceService(twitterClient);
-    this.xaiService = new XAIService();
     this.logger = LogStreamService.getInstance();
+    
+    // Initialize user API keys
+    this.initializeUserApiKeys();
   }
 
   async executeMission(): Promise<void> {
@@ -308,7 +312,7 @@ Consider:
 
 Return only a number from 0-100.`;
 
-      const result = await this.xaiService.generateContent({
+      const result = await this.aiService.generateContent({
         prompt,
         userId: 'system',
         maxTokens: 50,
@@ -342,7 +346,7 @@ Requirements:
 
 Return only the queries, one per line, without quotes or numbering.`;
 
-      const result = await this.xaiService.generateContent({
+      const result = await this.aiService.generateContent({
         prompt,
         userId: 'system',
         maxTokens: 200,
@@ -420,11 +424,13 @@ Return only the queries, one per line, without quotes or numbering.`;
     
     for (const tweet of filtered) {
       try {
-        const relevanceCheck = await this.xaiService.checkTweetRelevanceEnhanced(
+        const relevanceCheck = await this.aiService.checkTweetRelevanceEnhanced(
           tweet.text,
           this.mission.objective,
           this.mission.intentDescription,
-          tweet.public_metrics
+          tweet.public_metrics,
+          this.userApiKeys?.preferredProvider,
+          this.userApiKeys?.keys
         );
         
         if (relevanceCheck.isRelevant && relevanceCheck.totalScore >= 35) {
@@ -1079,12 +1085,18 @@ Return only the queries, one per line, without quotes or numbering.`;
         
         // Try up to 3 times to generate unique content
         while (attempts < 3 && !uniqueContent) {
-          const response = await this.xaiService.generateContent({
+          const aiRequest = {
             ...request,
-            prompt: attempts > 0 ? `${prompt} Generate a different variation with fresh perspective.` : prompt
-          });
+            prompt: attempts > 0 ? `${prompt} Generate a different variation with fresh perspective.` : prompt,
+            provider: this.userApiKeys?.preferredProvider,
+            userApiKeys: this.userApiKeys?.keys
+          };
+          
+          const response = await this.aiService.generateContent(aiRequest);
           
           if (response?.content) {
+            console.log(`✅ Generated content using ${response.provider} (${response.model})`);
+            
             // Check if this content has been posted before
             const isDuplicate = await this.checkContentDuplicate(response.content);
             if (!isDuplicate) {
@@ -1128,6 +1140,36 @@ Return only the queries, one per line, without quotes or numbering.`;
 
   private async delay(ms: number): Promise<void> {
     return new Promise(resolve => setTimeout(resolve, ms));
+  }
+
+  /**
+   * Initialize user API keys for AI providers
+   */
+  private async initializeUserApiKeys(): Promise<void> {
+    try {
+      const userKeys = await UserApiKeys.findOne({ userId: this.mission.userId });
+      if (userKeys) {
+        // Get decrypted keys manually since the method might not be available
+        const keys: any = {};
+        if (userKeys.apiKeys?.openai?.active) {
+          keys.openai = userKeys.getApiKey('openai');
+        }
+        if (userKeys.apiKeys?.xai?.active) {
+          keys.xai = userKeys.getApiKey('xai');
+        }
+        
+        this.userApiKeys = {
+          keys,
+          preferredProvider: userKeys.preferredProvider
+        };
+        console.log(`🔑 Loaded user API keys for mission: ${Object.keys(keys).join(', ')}`);
+      } else {
+        console.log('🔑 No user API keys found, using system keys');
+      }
+    } catch (error: any) {
+      console.error('❌ Failed to load user API keys:', error.message);
+      this.userApiKeys = null;
+    }
   }
 
   /**
