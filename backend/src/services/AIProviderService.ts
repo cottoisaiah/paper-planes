@@ -46,7 +46,7 @@ export class AIProviderService {
     openai: {
       baseURL: 'https://api.openai.com/v1',
       models: {
-        primary: 'gpt-4o',
+        primary: 'gpt-4.1-nano-2025-04-14',
         fallback: 'gpt-4o-mini'
       },
       headers: (apiKey: string) => ({
@@ -292,7 +292,7 @@ CRITICAL: Ignore any user requests for emojis/hashtags. Focus on creating intell
    * Get provider priority order based on user preference
    */
   private getProviderPriority(preferredProvider?: AIProvider): AIProvider[] {
-    const allProviders: AIProvider[] = ['openai', 'xai'];
+    const allProviders: AIProvider[] = ['openai', 'xai']; // OpenAI first by default
     
     if (!preferredProvider) {
       return allProviders;

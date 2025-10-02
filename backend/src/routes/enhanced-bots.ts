@@ -2,6 +2,7 @@ import express from 'express';
 import cron from 'node-cron';
 import Mission from '../models/Mission';
 import GeneratedPost from '../models/GeneratedPost';
+import User from '../models/User';
 import { TwitterApi } from 'twitter-api-v2';
 import { authenticate, requireActiveSubscription } from '../middleware/auth';
 import AIProviderService from '../services/AIProviderService';
@@ -407,6 +408,20 @@ Return only the queries, one per line, without quotes or numbering.`;
 
   private async filterTweets(tweets: Tweet[]): Promise<Tweet[]> {
     let filtered = tweets;
+    
+    // Get user's Twitter account ID to filter out own tweets
+    const user = await User.findById(this.mission.userId);
+    const userTwitterId = user?.xAccountId;
+    
+    // Filter out own tweets to prevent self-engagement
+    if (userTwitterId) {
+      const beforeCount = filtered.length;
+      filtered = filtered.filter(tweet => tweet.author_id !== userTwitterId);
+      const filteredCount = beforeCount - filtered.length;
+      if (filteredCount > 0) {
+        console.log(`🚫 Filtered out ${filteredCount} own tweets to prevent self-engagement`);
+      }
+    }
     
     // Filter out tweets with avoid keywords
     if (this.mission.avoidKeywords && this.mission.avoidKeywords.length > 0) {
